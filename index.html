@@ -117,7 +117,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);
 .td{width:clamp(7px,1.8vw,10px);height:clamp(7px,1.8vw,10px);border-radius:50%;background:transparent;transition:background .15s}
 .bm{position:absolute;bottom:1px;left:2px;right:2px;height:2px;background:var(--ng);border-radius:0 0 5px 5px;display:none;box-shadow:0 0 4px var(--ng3)}
 .tooth.bridged .bm{display:block}
-.tooth[data-t="crown"]  {background:#0c1c2a;border-color:#1e4f78}.tooth[data-t="crown"]  .td{background:#4a9edd}
+.tooth.tooth-sel{border-color:var(--ng) !important;box-shadow:0 0 8px var(--ng3);background:rgba(77,255,160,.15) !important;}
+.tooth.tooth-sel .tn{color:var(--ng) !important;}
 .tooth[data-t="inlay"]  {background:#261200;border-color:#6b3800}.tooth[data-t="inlay"]  .td{background:#e67e22}
 .tooth[data-t="anlay"]  {background:#231c00;border-color:#6b5500}.tooth[data-t="anlay"]  .td{background:#e0a810}
 .tooth[data-t="bridge"] {background:#1a0a26;border-color:#511f78}.tooth[data-t="bridge"] .td{background:#8e44ad}
@@ -437,35 +438,6 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);
 <header class="hdr">
   <div class="hdr-row">
     <div class="hdr-brand">
-      <!-- ロゴ：歯の外形 + 「3」が一筆書きで融合 -->
-      <div class="hdr-logo">
-        <svg viewBox="0 0 100 110" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <!-- 歯の外形（左右対称、根が2本） -->
-          <path d="
-            M50 10
-            C34 10 22 22 20 36
-            C18 46 22 56 24 65
-            C26 74 26 85 30 92
-            C33 97 38 95 40 88
-            C42 80 44 72 50 70
-            C56 72 58 80 60 88
-            C62 95 67 97 70 92
-            C74 85 74 74 76 65
-            C78 56 82 46 80 36
-            C78 22 66 10 50 10Z
-          " stroke="#4dffa0" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <!-- 「3」の数字：歯の内側に一筆書き風 -->
-          <path d="
-            M36 32
-            C38 26 48 24 54 28
-            C60 32 60 40 54 44
-            C50 46 46 46 44 46
-            C48 46 56 47 58 52
-            C62 58 58 68 50 70
-            C42 72 34 66 34 60
-          " stroke="#4dffa0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        </svg>
-      </div>
       <div class="hdr-text">
         <div class="hdr-title">歯科技工 オーダーフォーム</div>
         <div class="hdr-lab" id="hdr-lab">—</div>
@@ -489,22 +461,22 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);
     </div>
     <div class="f">
       <label><span class="lb">法定</span>&nbsp;担当歯科医師名 <span class="req">★</span></label>
-      <input type="text" id="doctor-name" placeholder="〇〇 先生" oninput="tick()">
+      <input type="text" id="doctor-name" placeholder="—" oninput="tick()">
       <div class="err-msg" id="e-dr">歯科医師名は法定必須です</div>
     </div>
     <div class="f">
       <label><span class="lb">法定</span>&nbsp;医院名 <span class="req">★</span></label>
-      <input type="text" id="clinic-name" placeholder="〇〇歯科クリニック" oninput="tick()">
+      <input type="text" id="clinic-name" placeholder="—" oninput="tick()">
       <div class="err-msg" id="e-cl">医院名は法定必須です</div>
     </div>
     <div class="f">
       <label><span class="lb">法定</span>&nbsp;医院所在地 <span class="req">★</span></label>
-      <input type="text" id="clinic-addr" placeholder="東京都〇〇区〇〇1-2-3" oninput="tick()">
+      <input type="text" id="clinic-addr" placeholder="—" oninput="tick()">
       <div class="err-msg" id="e-addr">所在地は法定必須です</div>
     </div>
     <div class="row2">
-      <div class="f"><label>電話番号</label><input type="tel" id="clinic-tel" placeholder="03-XXXX-XXXX"></div>
-      <div class="f"><label>メール</label><input type="email" id="clinic-mail" placeholder="clinic@example.com"></div>
+      <div class="f"><label>電話番号</label><input type="tel" id="clinic-tel" placeholder="—"></div>
+      <div class="f"><label>メール</label><input type="email" id="clinic-mail" placeholder="—"></div>
     </div>
   </div>
 </div>
@@ -516,7 +488,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);
     <div class="row2">
       <div class="f">
         <label><span class="lb">法定</span>&nbsp;患者氏名 <span class="req">★</span></label>
-        <input type="text" id="patient-name" placeholder="〇〇 〇〇" oninput="tick()">
+        <input type="text" id="patient-name" placeholder="—" oninput="tick()">
         <div class="err-msg" id="e-pt">患者名は法定必須です</div>
       </div>
       <div class="f"><label>性別</label><select id="patient-sex"><option value="">-</option><option>男</option><option>女</option></select></div>
@@ -524,7 +496,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);
     <div class="row2">
       <div class="f">
         <label>カルテ番号</label>
-        <input type="text" id="chart-no" placeholder="例: 12345" oninput="syncOrderNo()">
+        <input type="text" id="chart-no" placeholder="—" oninput="syncOrderNo()">
         <div class="hint">入力すると受注番号に自動反映</div>
       </div>
       <div class="f">
@@ -537,22 +509,41 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);
   </div>
 </div>
 
-<!-- ③ 歯式チャート -->
+<!-- ③ 歯式チャート（選択→設定 統合型） -->
 <div class="sec">
   <div class="sec-lbl"><div class="sn">3</div>歯式チャート <span class="lb">法定</span></div>
   <div class="sec-body" style="padding:11px 8px 14px;">
+
+    <!-- 操作ヒント -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding:0 2px;">
+      <div style="font-size:11px;color:var(--tx2);">歯をタップして選択 → ボタンで設定</div>
+      <button onclick="clearAllSelected()" style="font-size:11px;color:var(--ng);background:none;border:none;cursor:pointer;font-family:inherit;padding:0;">選択解除</button>
+    </div>
+
+    <!-- 歯式（クリックで選択） -->
     <div class="chart-scroll">
-      <div class="chart-inner" id="chart-inner">
-        <!-- JS で生成 -->
-      </div>
+      <div class="chart-inner" id="chart-inner"></div>
     </div>
-    <div class="conn-hint">
-      <div class="ch-i"><div class="ch-d" style="background:var(--bd2);border:1.5px solid var(--tx3)"></div>未連結</div>
-      <div class="ch-i"><div class="ch-d" style="background:var(--ng);box-shadow:0 0 4px var(--ng3)"></div>連結（ブリッジ）</div>
-      <div class="ch-i" style="margin-left:auto;font-size:10px;color:var(--tx3);">← スワイプで見る →</div>
+
+    <!-- 凡例 -->
+    <div class="legend" id="legend" style="margin-top:10px;"></div>
+
+    <!-- 連結ヒント -->
+    <div style="display:flex;gap:12px;margin-top:8px;padding:0 2px;">
+      <div class="ch-i"><div class="ch-d" style="background:var(--ng);box-shadow:0 0 4px var(--ng3)"></div><span style="font-size:10px;color:var(--tx2);">選択中</span></div>
+      <div class="ch-i"><div class="ch-d" style="background:var(--ng);box-shadow:0 0 4px var(--ng3);opacity:.4"></div><span style="font-size:10px;color:var(--tx2);">設定済（再タップで再設定）</span></div>
     </div>
-    <div class="legend" id="legend"></div>
-    <div class="err-msg" id="e-teeth" style="margin-top:8px;">補綴物を1つ以上登録してください（法定：設計）</div>
+
+    <!-- 設定ボタン（選択中の歯がある時だけ強調） -->
+    <button onclick="openMultiSheet()" id="set-btn"
+      style="width:100%;margin-top:10px;padding:13px;border:none;border-radius:9px;
+      font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;
+      background:var(--s3);color:var(--tx3);transition:all .2s;"
+      disabled>
+      歯を選択してください
+    </button>
+
+    <div class="err-msg" id="e-teeth" style="margin-top:6px;">補綴物を1つ以上登録してください（法定：設計）</div>
   </div>
 </div>
 
@@ -571,7 +562,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);
     </div>
     <div class="custody-other">
       <label>その他</label>
-      <input type="text" id="custody-other-txt" placeholder="例: 模型2本、バイトなど">
+      <input type="text" id="custody-other-txt" placeholder="—">
     </div>
   </div>
 </div>
@@ -597,7 +588,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);
         <select id="photo-yn"><option>無</option><option>有（添付）</option><option>有（別送）</option></select>
       </div>
     </div>
-    <div class="f"><label><span class="lb">法定</span>&nbsp;指示事項</label><textarea id="notes" placeholder="例: L6 フルジルコニアクラウン（ステイニング）、染色仕上げ、有髄..."></textarea></div>
+    <div class="f"><label><span class="lb">法定</span>&nbsp;指示事項</label><textarea id="notes" placeholder="—"></textarea></div>
   </div>
 </div>
 
@@ -625,7 +616,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);
 </div>
 
 <div class="bot">
-  <button class="btn-prev" onclick="showPrint()">👁 確認</button>
+  <button class="btn-prev" onclick="showPrint()">確認</button>
   <button class="btn-send" onclick="submitOrder()">送信 →</button>
 </div>
 
@@ -641,63 +632,57 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);
       <div class="flow">
         <div class="fs" id="fs1">① 種類</div><div class="fa">›</div>
         <div class="fs" id="fs2">② 補綴物名</div><div class="fa">›</div>
-        <div class="fs" id="fs3">③ 材料</div><div class="fa">›</div>
-        <div class="fs" id="fs4">④ 詳細</div>
+        <div class="fs" id="fs3">③ 材料・詳細</div>
       </div>
 
-      <!-- P1 -->
+      <!-- P1: 種類 -->
       <div id="sp1">
         <div class="sf"><label><span class="lb">法定</span>&nbsp;補綴物の種類</label><div class="tgrid" id="type-grid"></div></div>
       </div>
 
-      <!-- P2 補綴物名（入力のみ） -->
+      <!-- P2: 補綴物名（入力のみ＋クイック） -->
       <div id="sp2" style="display:none">
         <button class="back-btn" onclick="goPage(1)">‹ 種類に戻る</button>
         <div class="sf">
           <label><span class="lb">法定</span>&nbsp;補綴物名を入力</label>
           <div class="input-name">
-            <span class="input-name-lbl">名称</span>
-            <input type="text" id="pname-input" placeholder="例: フルジルコニアクラウン" oninput="onPname()">
+            <input type="text" id="pname-input" placeholder="—" oninput="onPname()">
           </div>
-          <div style="margin-top:8px;font-size:10px;color:var(--tx3);">よく使う補綴物名：</div>
-          <div id="quick-names" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;"></div>
+          <div style="margin-top:6px;" id="quick-names" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
         </div>
         <div class="sf" style="text-align:right;">
           <button onclick="goToMat()" style="padding:10px 20px;background:var(--ng);color:#000;border:none;border-radius:8px;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;opacity:.5;" id="next-to-mat">次へ →</button>
         </div>
       </div>
 
-      <!-- P3 材料 -->
+      <!-- P3: 材料（入力のみ）＋連結 -->
       <div id="sp3" style="display:none">
         <button class="back-btn" onclick="goPage(2)">‹ 補綴物名に戻る</button>
         <div class="sf">
-          <label><span class="lb">法定</span>&nbsp;使用材料</label>
-          <div class="mat-list" id="mat-list"></div>
-          <div class="custom-mat">
-            <label>手入力</label>
-            <input type="text" id="custom-mat-input" placeholder="例: ジルコニア（多層）KATANA" oninput="onCustomMat()">
+          <label><span class="lb">法定</span>&nbsp;使用材料を入力</label>
+          <div class="input-name">
+            <input type="text" id="custom-mat-input" placeholder="—" oninput="onCustomMat()">
           </div>
+          <div id="quick-mats" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;"></div>
         </div>
-      </div>
-
-      <!-- P4 詳細 -->
-      <div id="sp4" style="display:none">
-        <button class="back-btn" onclick="goPage(3)">‹ 材料に戻る</button>
-        <div class="br-row">
-          <div><span>連結（ブリッジ）</span><small>ONにすると隣の歯と連結されます</small></div>
-          <button class="tog" id="bridge-tog" onclick="toggleBridge()"></button>
+        <!-- インプラントのみ：メーカー入力欄 -->
+        <div class="sf" id="implant-maker-row" style="display:none;margin-top:4px;">
+          <label>インプラントメーカー</label>
+          <div class="input-name">
+            <input type="text" id="implant-maker-input" placeholder="例: オステム、ストローマン...">
+          </div>
+          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:5px;" id="quick-makers"></div>
         </div>
-        <div class="sf">
+        <div class="sf" style="margin-top:4px;">
           <label>歯髄の状態</label>
           <div class="pulp-row">
-            <button class="pulp-btn sel" data-v="不明" onclick="selPulp(this)">不明</button>
             <button class="pulp-btn" data-v="有髄" onclick="selPulp(this)">有髄</button>
             <button class="pulp-btn" data-v="無髄" onclick="selPulp(this)">無髄</button>
           </div>
         </div>
-        <div class="sf" style="margin-top:11px;">
-          <label>詳細メモ（任意）</label>
-          <textarea id="detail-txt" placeholder="例: 染色仕上げ、コンタクト強め..."></textarea>
+        <div class="br-row" style="margin-top:10px;">
+          <div><span>連結（ブリッジ）</span><small>ONにすると隣の歯と連結されます</small></div>
+          <button class="tog" id="bridge-tog" onclick="toggleBridge()"></button>
         </div>
       </div>
     </div>
@@ -848,35 +833,18 @@ const LAB = {
   name:'dcサンライク',
   address:'東京都千代田区九段南4-7-22',
   tel:'03-4565-6039',
-  types:{crown:true,inlay:true,anlay:true,bridge:true,veneer:true,denture:true,implant:true,post:true,other:true},
+  types:{crown:true,inlay:true,veneer:true,implant:true,other:true},
   catalog:{
-    crown:  {label:'クラウン',    color:'#4a9edd',
-      quickNames:['フルジルコニアクラウン','ステイニングクラウン','レイアリングクラウン','フェイシャルカットバック','e.maxクラウン','メタルクラウン','テンポラリークラウン'],
-      materials:[{name:'ジルコニア（多層）',sub:'KATANA等'},{name:'ジルコニア（単色）',sub:'高強度'},{name:'ジルコニア（ウルトラトランス）',sub:'高透明'},{name:'リチウムディシリケート',sub:'e.max CAD'},{name:'リチウムディシリケート',sub:'e.max Press'},{name:'メタルボンド（Co-Cr）',sub:''},{name:'メタルボンド（金合金）',sub:''},{name:'PMMA',sub:'テンポラリー用'}]},
-    inlay:  {label:'インレー',    color:'#e67e22',
-      quickNames:['CAD/CAMインレー','プレスインレー','キャストインレー'],
-      materials:[{name:'ジルコニア',sub:''},{name:'リチウムディシリケート',sub:'e.max CAD'},{name:'リチウムディシリケート',sub:'e.max Press'},{name:'ハイブリッドセラミック',sub:''},{name:'金合金',sub:''},{name:'コバルトクロム',sub:''}]},
-    anlay:  {label:'アンレー',    color:'#e0a810',
-      quickNames:['CAD/CAMアンレー','キャストアンレー'],
-      materials:[{name:'ジルコニア',sub:''},{name:'リチウムディシリケート',sub:'e.max CAD'},{name:'金合金',sub:''}]},
-    bridge: {label:'ブリッジ',    color:'#8e44ad',
-      quickNames:['フルジルコニアブリッジ','レイアリングブリッジ','ステイニングブリッジ'],
-      materials:[{name:'ジルコニア（多層）',sub:''},{name:'ジルコニア（単色）',sub:''},{name:'ジルコニアフレーム',sub:'築盛用'},{name:'メタルボンド（Co-Cr）',sub:''}]},
-    veneer: {label:'ベニア',      color:'#1abc9c',
-      quickNames:['プレスベニア','CAD/CAMベニア'],
-      materials:[{name:'リチウムディシリケート',sub:'e.max Press'},{name:'リチウムディシリケート',sub:'e.max CAD'}]},
-    denture:{label:'義歯',        color:'#27ae60',
-      quickNames:['レジン床義歯','金属床義歯（Co-Cr）','金属床義歯（Ti）','ノンクラスプデンチャー'],
-      materials:[{name:'レジン床',sub:''},{name:'ノンクラスプ',sub:''},{name:'金属床（Co-Cr）',sub:''},{name:'金属床（Ti）',sub:''}]},
-    implant:{label:'インプラント',color:'#e74c3c',
-      quickNames:['インプラントフルジルコニア','インプラントステイニング','カスタムアバットメント','インプラントプロビ'],
-      materials:[{name:'ジルコニア（多層）',sub:''},{name:'ジルコニア（単色）',sub:''},{name:'チタンベース（Nobel）',sub:''},{name:'チタンベース（Straumann）',sub:''},{name:'チタンベース（BIOMET3i）',sub:''},{name:'PMMA',sub:'プロビ用'}]},
-    post:   {label:'ポスト・コア',color:'#d4ac0d',
-      quickNames:['キャストポスト＆コア','CAD/CAMポスト'],
-      materials:[{name:'コバルトクロム',sub:''},{name:'金合金',sub:''},{name:'ジルコニア',sub:'ミリング'}]},
-    other:  {label:'その他',      color:'#888',
-      quickNames:['その他'],
-      materials:[{name:'その他（指示事項に記載）',sub:''}]},
+    crown:  {label:'クラウン',      color:'#4a9edd',
+      materials:[{name:'ジルコニア（多層）'},{name:'ジルコニア（単色）'},{name:'リチウムディシリケート'},{name:'メタルボンド（Co-Cr）'},{name:'メタルボンド（金合金）'},{name:'PMMA'}]},
+    inlay:  {label:'インレー/アンレー', color:'#e67e22',
+      materials:[{name:'ジルコニア'},{name:'リチウムディシリケート'},{name:'ハイブリッドセラミック'},{name:'金合金'},{name:'コバルトクロム'}]},
+    veneer: {label:'ベニア',        color:'#1abc9c',
+      materials:[{name:'リチウムディシリケート'},{name:'コンポジットレジン'}]},
+    implant:{label:'インプラント',  color:'#e74c3c',
+      materials:[{name:'ジルコニア（多層）'},{name:'ジルコニア（単色）'},{name:'チタンベース'},{name:'PMMA'}]},
+    other:  {label:'その他',        color:'#888',
+      materials:[{name:'その他（指示事項に記載）'}]},
   },
   custodyItems:['模型','対合模型','参考模型','バイト','トレー','データ受注'],
 };
@@ -886,7 +854,7 @@ const UPPER=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
 const LOWER=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
 let teeth={},conns={},photos=[],custody=new Set();
 let curTooth=null,sheetPage=1;
-let cur={type:null,productName:null,material:null,pulp:'不明',detail:'',bridge:false};
+let cur={type:null,productName:null,material:null,pulp:'',detail:'',bridge:false,implantMaker:''};
 
 function init(){
   document.getElementById('hdr-lab').textContent=LAB.name;
@@ -924,60 +892,52 @@ function buildCustody(){
   });
 }
 
-/* ── CHART（2段レイアウト） ── */
+/* ── CHART ── */
+// UPPER: [18,17,16,15,14,13,12,11] が右側、[21,22,23,24,25,26,27,28] が左側
+// 表示は 18→11 | 21→28 の順（正中に向かって並ぶ）
+let dragSelecting=false, dragType=null, dragStartNum=null;
+
 function buildChart(){
   const ci=document.getElementById('chart-inner'); ci.innerHTML='';
 
-  // 上顎（右：11〜18、左：21〜28）
-  const upperRight=UPPER.slice(0,8); // 18〜11
-  const upperLeft=UPPER.slice(8);    // 21〜28
+  const upperRight=[18,17,16,15,14,13,12,11]; // 右→正中
+  const upperLeft= [21,22,23,24,25,26,27,28]; // 正中→左
+  const lowerRight=[48,47,46,45,44,43,42,41];
+  const lowerLeft= [31,32,33,34,35,36,37,38];
 
   const uBlock=document.createElement('div'); uBlock.className='jaw-block';
-
   const uRight=document.createElement('div'); uRight.className='jaw-half right';
-  buildHalfRow(uRight,upperRight,'right');
-
+  buildHalfRow(uRight,upperRight);
   const uMid=document.createElement('div'); uMid.className='jaw-mid';
   uMid.innerHTML='上<div class="jaw-mid-line"></div>';
-
   const uLeft=document.createElement('div'); uLeft.className='jaw-half left';
-  buildHalfRow(uLeft,upperLeft,'left');
-
+  buildHalfRow(uLeft,upperLeft);
   uBlock.appendChild(uRight); uBlock.appendChild(uMid); uBlock.appendChild(uLeft);
   ci.appendChild(uBlock);
 
-  // 上下セパレータ
   const sep=document.createElement('div'); sep.className='jaw-sep'; sep.innerHTML='上 / 下';
   ci.appendChild(sep);
 
-  // 下顎
-  const lowerRight=LOWER.slice(0,8); // 48〜41
-  const lowerLeft=LOWER.slice(8);    // 31〜38
-
   const lBlock=document.createElement('div'); lBlock.className='jaw-block';
-
   const lRight=document.createElement('div'); lRight.className='jaw-half right';
-  buildHalfRow(lRight,lowerRight,'right');
-
+  buildHalfRow(lRight,lowerRight);
   const lMid=document.createElement('div'); lMid.className='jaw-mid';
   lMid.innerHTML='下<div class="jaw-mid-line"></div>';
-
   const lLeft=document.createElement('div'); lLeft.className='jaw-half left';
-  buildHalfRow(lLeft,lowerLeft,'left');
-
+  buildHalfRow(lLeft,lowerLeft);
   lBlock.appendChild(lRight); lBlock.appendChild(lMid); lBlock.appendChild(lLeft);
   ci.appendChild(lBlock);
+
+  // ドラッグ終了
+  document.addEventListener('mouseup', ()=>{ dragSelecting=false; dragType=null; dragStartNum=null; });
+  document.addEventListener('touchend', ()=>{ dragSelecting=false; dragType=null; dragStartNum=null; });
 }
 
-function buildHalfRow(container,nums,side){
-  // right側：nums[0]=最遠心、最後が正中寄り → 正中に近い順に右から並べる
-  // left側：nums[0]=正中寄り → そのまま
-  const ordered = side==='right' ? [...nums].reverse() : [...nums];
-  ordered.forEach((n,i)=>{
+function buildHalfRow(container,nums){
+  nums.forEach((n,i)=>{
     const wrap=document.createElement('div'); wrap.className='twrap';
-    // コネクター
     if(i>0){
-      const prev=ordered[i-1];
+      const prev=nums[i-1];
       const key=ck(prev,n);
       const con=document.createElement('div');
       con.className='conn'+(conns[key]?' on':'');
@@ -989,9 +949,47 @@ function buildHalfRow(container,nums,side){
     const t=document.createElement('div');
     t.className='tooth'; t.dataset.num=n;
     t.innerHTML=`<span class="tn">${n}</span><div class="td"></div><div class="bm"></div>`;
-    t.onclick=()=>openSheet(n);
+
+    // タップで選択/解除
+    t.addEventListener('click', ()=>{
+      if(multiSelected.has(n)){
+        multiSelected.delete(n);
+        t.classList.remove('tooth-sel');
+      } else {
+        multiSelected.add(n);
+        t.classList.add('tooth-sel');
+      }
+      updateSetBtn();
+    });
+
     wrap.appendChild(t); container.appendChild(wrap);
   });
+}
+
+function updateSetBtn(){
+  const btn=document.getElementById('set-btn');
+  if(!btn) return;
+  const n=multiSelected.size;
+  if(n===0){
+    btn.textContent='歯を選択してください';
+    btn.style.background='var(--s3)'; btn.style.color='var(--tx3)';
+    btn.disabled=true;
+  } else {
+    const nums=[...multiSelected].sort((a,b)=>a-b).join('・');
+    btn.textContent=`歯番 ${nums} の補綴物を設定する`;
+    btn.style.background='var(--ng)'; btn.style.color='#000';
+    btn.disabled=false;
+    btn.style.boxShadow=`0 0 14px var(--ng3)`;
+  }
+}
+
+function clearAllSelected(){
+  multiSelected.forEach(n=>{
+    const t=document.querySelector(`.tooth[data-num="${n}"]`);
+    if(t) t.classList.remove('tooth-sel');
+  });
+  multiSelected=new Set();
+  updateSetBtn();
 }
 
 function ck(a,b){ return Math.min(a,b)+'-'+Math.max(a,b); }
@@ -1018,10 +1016,10 @@ function refreshTooth(n){
 /* ── SHEET ── */
 function openSheet(n){
   curTooth=n; const ex=teeth[n]||{};
-  cur={type:ex.type||null,productName:ex.productName||null,material:ex.material||null,pulp:ex.pulp||'不明',detail:ex.detail||'',bridge:ex.bridge||false};
+  cur={type:ex.type||null,productName:ex.productName||null,material:ex.material||null,pulp:ex.pulp||'不明',detail:'',bridge:ex.bridge||false};
   document.getElementById('stitle').textContent=`歯番 ${n}`;
   buildTypePage();
-  goPage(ex.type?(ex.productName?(ex.material?4:3):2):1);
+  goPage(ex.type?(ex.productName?(ex.material?3:2):2):1);
   document.getElementById('sheet-bg').classList.add('open');
   document.body.style.overflow='hidden';
 }
@@ -1029,9 +1027,9 @@ function closeSheet(){ document.getElementById('sheet-bg').classList.remove('ope
 
 function goPage(p){
   sheetPage=p;
-  [1,2,3,4].forEach(i=>{ document.getElementById('sp'+i).style.display=i===p?'block':'none'; });
-  [1,2,3,4].forEach(i=>{ const e=document.getElementById('fs'+i); e.className='fs'+(i===p?' active':i<p?' done':''); });
-  document.getElementById('sacts').style.display=p===4?'flex':'none';
+  [1,2,3].forEach(i=>{ const el=document.getElementById('sp'+i); if(el) el.style.display=i===p?'block':'none'; });
+  [1,2,3].forEach(i=>{ const e=document.getElementById('fs'+i); if(e) e.className='fs'+(i===p?' active':i<p?' done':''); });
+  document.getElementById('sacts').style.display=p===3?'flex':'none';
   document.getElementById('sheet').scrollTop=0;
 }
 
@@ -1050,19 +1048,8 @@ function buildProductPage(){
   const cfg=LAB.catalog[cur.type];
   document.getElementById('pname-input').value=cur.productName||'';
   updateNextBtn();
-  // クイック選択ボタン
-  const qn=document.getElementById('quick-names'); qn.innerHTML='';
-  cfg.quickNames.forEach(name=>{
-    const b=document.createElement('button');
-    b.style.cssText=`padding:5px 10px;border:1px solid var(--bd2);border-radius:5px;background:var(--s2);color:var(--tx);font-family:inherit;font-size:11px;cursor:pointer;touch-action:manipulation;`;
-    b.textContent=name;
-    b.onclick=()=>{
-      document.getElementById('pname-input').value=name;
-      cur.productName=name;
-      updateNextBtn();
-    };
-    qn.appendChild(b);
-  });
+  // クイック補綴物名（空にする）
+  const qn=document.getElementById('quick-names'); if(qn) qn.innerHTML='';
 }
 
 function onPname(){
@@ -1081,30 +1068,153 @@ function goToMat(){
 
 function buildMatPage(){
   const cfg=LAB.catalog[cur.type];
-  const list=document.getElementById('mat-list'); list.innerHTML='';
-  document.getElementById('custom-mat-input').value='';
-  cfg.materials.forEach(m=>{
-    const d=document.createElement('div'); d.className='mbtn'+(cur.material===m.name?' sel':'');
-    d.innerHTML=`<div><div class="mn">${m.name}</div>${m.sub?`<div class="ms">${m.sub}</div>`:''}</div><div class="mck">${cur.material===m.name?'✓':''}</div>`;
-    d.onclick=()=>{ cur.material=m.name; document.getElementById('custom-mat-input').value=''; buildDetailPage(); goPage(4); };
-    list.appendChild(d);
+  document.getElementById('custom-mat-input').value=cur.material||'';
+  document.querySelectorAll('.pulp-btn').forEach(b=>b.classList.toggle('sel',b.dataset.v===cur.pulp));
+  document.getElementById('bridge-tog').classList.toggle('on',!!cur.bridge);
+
+  // インプラントのみメーカー欄を表示
+  const makerRow=document.getElementById('implant-maker-row');
+  if(cur.type==='implant'){
+    makerRow.style.display='block';
+    document.getElementById('implant-maker-input').value=cur.implantMaker||'';
+    const qm2=document.getElementById('quick-makers'); qm2.innerHTML='';
+    ['オステム','ストローマン','ノーベルバイオケア','BIOMET 3i','京セラ','アストラテック'].forEach(m=>{
+      const b=document.createElement('button');
+      b.style.cssText=`padding:5px 10px;border:1px solid var(--bd2);border-radius:5px;background:var(--s2);color:var(--tx);font-family:inherit;font-size:11px;cursor:pointer;touch-action:manipulation;`;
+      b.textContent=m;
+      b.onclick=()=>{ document.getElementById('implant-maker-input').value=m; cur.implantMaker=m; };
+      qm2.appendChild(b);
+    });
+  } else {
+    makerRow.style.display='none';
+  }
+
+  // 材料クイック候補（カタログから）
+  const qm=document.getElementById('quick-mats'); qm.innerHTML='';
+  const matNames=[...new Set(cfg.materials.map(m=>m.name))];
+  matNames.forEach(name=>{
+    const b=document.createElement('button');
+    b.style.cssText=`padding:5px 10px;border:1px solid var(--bd2);border-radius:5px;background:var(--s2);color:var(--tx);font-family:inherit;font-size:11px;cursor:pointer;touch-action:manipulation;`;
+    b.textContent=name;
+    b.onclick=()=>{ document.getElementById('custom-mat-input').value=name; cur.material=name; };
+    qm.appendChild(b);
   });
 }
 function onCustomMat(){ cur.material=document.getElementById('custom-mat-input').value.trim()||null; }
 
-function buildDetailPage(){
-  document.querySelectorAll('.pulp-btn').forEach(b=>b.classList.toggle('sel',b.dataset.v===cur.pulp));
-  document.getElementById('detail-txt').value=cur.detail||'';
-  document.getElementById('bridge-tog').classList.toggle('on',!!cur.bridge);
+/* ── 複数歯選択 ── */
+let multiSelected=new Set();
+
+function buildMultiBoxes(){
+  const box=document.getElementById('multi-tooth-boxes');
+  if(!box) return;
+  // 歯式と同じ並び：右上→左上→右下→左下
+  const uRight=[18,17,16,15,14,13,12,11];
+  const uLeft= [21,22,23,24,25,26,27,28];
+  const lRight=[48,47,46,45,44,43,42,41];
+  const lLeft= [31,32,33,34,35,36,37,38];
+
+  const makeRow=(nums,label)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;gap:4px;align-items:center;margin-bottom:4px;';
+    const lbl=document.createElement('span');
+    lbl.style.cssText='font-size:9px;color:var(--tx3);width:14px;text-align:center;font-family:"DM Mono",monospace;flex-shrink:0;';
+    lbl.textContent=label;
+    row.appendChild(lbl);
+    nums.forEach(n=>{
+      const el=document.createElement('div');
+      el.dataset.n=n;
+      el.onclick=()=>toggleMulti(n,el);
+      el.style.cssText=`width:30px;height:26px;border:1.5px solid var(--bd2);border-radius:4px;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:'DM Mono',monospace;color:var(--tx2);cursor:pointer;user-select:none;transition:all .12s;`;
+      el.textContent=n;
+      row.appendChild(el);
+    });
+    return row;
+  };
+
+  box.innerHTML='';
+  // 上下セパレーター付きで並べる
+  const uRow=document.createElement('div');
+  uRow.style.cssText='display:flex;gap:2px;align-items:center;margin-bottom:3px;';
+  const uR=makeRow(uRight,'右'); const mid=document.createElement('div');
+  mid.style.cssText='width:1px;height:26px;background:var(--bd2);margin:0 4px;flex-shrink:0;';
+  const uL=makeRow(uLeft,'左');
+  // 上顎1行
+  const uWrap=document.createElement('div');
+  uWrap.style.cssText='display:flex;align-items:center;gap:2px;margin-bottom:2px;';
+  [...uRight,...uLeft].forEach((n,i)=>{
+    if(i===8){ const d=document.createElement('div'); d.style.cssText='width:1px;height:26px;background:var(--bd2);margin:0 3px;'; uWrap.appendChild(d); }
+    const el=document.createElement('div');
+    el.dataset.n=n;
+    el.onclick=()=>toggleMulti(n,el);
+    el.style.cssText=`width:30px;height:26px;border:1.5px solid var(--bd2);border-radius:4px;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:'DM Mono',monospace;color:var(--tx2);cursor:pointer;user-select:none;transition:all .12s;flex-shrink:0;`;
+    el.textContent=n;
+    uWrap.appendChild(el);
+  });
+  box.appendChild(uWrap);
+
+  const sep=document.createElement('div');
+  sep.style.cssText='font-size:9px;color:var(--tx3);text-align:center;margin:2px 0;font-family:"DM Mono",monospace;letter-spacing:.08em;';
+  sep.textContent='── 上 / 下 ──';
+  box.appendChild(sep);
+
+  const lWrap=document.createElement('div');
+  lWrap.style.cssText='display:flex;align-items:center;gap:2px;';
+  [...lRight,...lLeft].forEach((n,i)=>{
+    if(i===8){ const d=document.createElement('div'); d.style.cssText='width:1px;height:26px;background:var(--bd2);margin:0 3px;'; lWrap.appendChild(d); }
+    const el=document.createElement('div');
+    el.dataset.n=n;
+    el.onclick=()=>toggleMulti(n,el);
+    el.style.cssText=`width:30px;height:26px;border:1.5px solid var(--bd2);border-radius:4px;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:'DM Mono',monospace;color:var(--tx2);cursor:pointer;user-select:none;transition:all .12s;flex-shrink:0;`;
+    el.textContent=n;
+    lWrap.appendChild(el);
+  });
+  box.appendChild(lWrap);
+}
+
+function toggleMulti(n,el){
+  if(multiSelected.has(n)){
+    multiSelected.delete(n);
+    el.style.background='var(--s2)'; el.style.borderColor='var(--bd2)'; el.style.color='var(--tx2)';
+  } else {
+    multiSelected.add(n);
+    el.style.background='var(--ng)'; el.style.borderColor='var(--ng)'; el.style.color='#000';
+  }
+}
+
+function openMultiSheet(){
+  if(multiSelected.size===0){ alert('歯を選択してください'); return; }
+  const nums=[...multiSelected].sort((a,b)=>a-b);
+  curTooth=nums[0];
+  // 既に設定がある場合は引き継ぐ
+  const ex=teeth[curTooth]||{};
+  cur={type:ex.type||null,productName:ex.productName||null,material:ex.material||null,
+       pulp:ex.pulp||'',detail:'',bridge:ex.bridge||false,implantMaker:ex.implantMaker||''};
+  document.getElementById('stitle').textContent=
+    nums.length===1 ? `歯番 ${nums[0]} の設定` : `歯番 ${nums.join('・')} に一括設定`;
+  buildTypePage();
+  goPage(cur.type?(cur.productName?(cur.material?3:2):2):1);
+  document.getElementById('sheet-bg').classList.add('open');
+  document.body.style.overflow='hidden';
 }
 function selPulp(btn){ cur.pulp=btn.dataset.v; document.querySelectorAll('.pulp-btn').forEach(b=>b.classList.toggle('sel',b===btn)); }
 function toggleBridge(){ cur.bridge=!cur.bridge; document.getElementById('bridge-tog').classList.toggle('on',cur.bridge); }
 
 function saveTooth(){
   const cm=document.getElementById('custom-mat-input').value.trim(); if(cm) cur.material=cm;
+  if(cur.type==='implant'){
+    cur.implantMaker=document.getElementById('implant-maker-input').value.trim()||'';
+  }
   if(!cur.type||!cur.productName||!cur.material){alert('種類・補綴物名・材料を入力してください');return;}
-  cur.detail=document.getElementById('detail-txt').value;
-  teeth[curTooth]={...cur}; refreshTooth(curTooth); renderChips(); tick(); closeSheet();
+  const data={...cur,detail:''};
+
+  // 選択中の全歯に適用
+  const targets=multiSelected.size>0 ? [...multiSelected] : [curTooth];
+  targets.forEach(n=>{ teeth[n]={...data}; refreshTooth(n); });
+
+  // 選択解除
+  clearAllSelected();
+  renderChips(); tick(); closeSheet();
 }
 function clearTooth(){ delete teeth[curTooth]; refreshTooth(curTooth); renderChips(); tick(); closeSheet(); }
 
@@ -1119,7 +1229,7 @@ function renderChips(){
       <span class="chip-n" style="color:${col}">${n}</span>
       <div class="chip-info">
         <div class="chip-main">${d.bridge?'🔗':''} ${d.productName}</div>
-        <div class="chip-sub">${d.material}${d.pulp&&d.pulp!=='不明'?' · '+d.pulp:''}</div>
+        <div class="chip-sub">${d.material}${d.implantMaker?' / '+d.implantMaker:''}${d.pulp&&d.pulp!=='不明'?' · '+d.pulp:''}</div>
       </div>
       <button class="chip-del" onclick="delChip(${n})">×</button>
     </div>`;
@@ -1153,38 +1263,6 @@ function tick(){
 }
 function v(id){ return document.getElementById(id)?.value.trim(); }
 
-/* ── FIREBASE 初期化 ── */
-// Firebase SDKをCDNから読み込み（グローバル変数として使用）
-let db = null;
-
-async function initFirebase() {
-  try {
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-    const { getFirestore, collection, addDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyBx5HX54j__fH_ZDhGJOLLaqgdHRFSxdmA",
-      authDomain: "dc-3like-order.firebaseapp.com",
-      projectId: "dc-3like-order",
-      storageBucket: "dc-3like-order.firebasestorage.app",
-      messagingSenderId: "982264143845",
-      appId: "1:982264143845:web:37ebd669f8ed6d9fa2d90c"
-    };
-
-    const firebaseApp = initializeApp(firebaseConfig);
-    db = getFirestore(firebaseApp);
-
-    // グローバルに保持
-    window._fbAddDoc = addDoc;
-    window._fbCollection = collection;
-    window._fbServerTimestamp = serverTimestamp;
-    console.log('Firebase初期化完了');
-  } catch(e) {
-    console.warn('Firebase初期化失敗:', e);
-  }
-}
-initFirebase();
-
 /* ── SUBMIT ── */
 function validate(){
   let ok=true;
@@ -1197,48 +1275,14 @@ function validate(){
   return ok;
 }
 
-async function submitOrder(){
+function submitOrder(){
   if(!validate()){document.querySelector('.err-msg.show')?.closest('.sec')?.scrollIntoView({behavior:'smooth'});return;}
-
-  // ボタンをローディング状態に
-  const btn=document.querySelector('.btn-send');
-  btn.textContent='送信中...'; btn.disabled=true;
-
   const id='ORD-'+Date.now().toString().slice(-6);
   const o=buildOrder(id);
-
-  try {
-    // Firestoreに保存
-    if(db && window._fbAddDoc) {
-      await window._fbAddDoc(window._fbCollection(db,'orders'),{
-        ...o,
-        serverCreatedAt: window._fbServerTimestamp(),
-      });
-      console.log('Firestore保存成功！');
-    } else {
-      throw new Error('Firebase未初期化');
-    }
-
-    // ローカルにも保存（管理画面用）
-    const arr=JSON.parse(localStorage.getItem('dental-orders')||'[]');
-    arr.unshift(o); localStorage.setItem('dental-orders',JSON.stringify(arr));
-
-    document.getElementById('sid').textContent=`ORDER # ${id}`;
-    const notifs=['n1','n2','n3'];
-    notifs.forEach((nid,i)=>{ setTimeout(()=>{ const el=document.getElementById(nid); el.classList.add('sent'); },400+i*400); });
-    document.getElementById('suc').classList.add('open');
-
-  } catch(err){
-    console.error('Firestore保存エラー:',err);
-    // オフライン時はローカル保存で続行
-    const arr=JSON.parse(localStorage.getItem('dental-orders')||'[]');
-    arr.unshift(o); localStorage.setItem('dental-orders',JSON.stringify(arr));
-    document.getElementById('sid').textContent=`ORDER # ${id}`;
-    document.getElementById('suc').classList.add('open');
-    alert('⚠ オフラインのため、データはローカルに保存されました。');
-  } finally {
-    btn.textContent='送信 →'; btn.disabled=false;
-  }
+  const arr=JSON.parse(localStorage.getItem('dental-orders')||'[]');
+  arr.unshift(o); localStorage.setItem('dental-orders',JSON.stringify(arr));
+  document.getElementById('sid').textContent=`ORDER # ${id}`;
+  document.getElementById('suc').classList.add('open');
 }
 function buildOrder(id){
   const custodyArr=[...custody]; const custOther=v('custody-other-txt');
@@ -1346,7 +1390,6 @@ function closePrint(){ document.getElementById('pm').classList.remove('open'); }
 
 init();
 
-// module scopeの関数をHTMLのonclickから呼べるようにwindowに登録
 window.submitOrder=submitOrder;
 window.showPrint=showPrint;
 window.closePrint=closePrint;
@@ -1364,6 +1407,9 @@ window.addPhotos=addPhotos;
 window.delPhoto=delPhoto;
 window.syncOrderNo=syncOrderNo;
 window.resetAll=resetAll;
+window.clearAllSelected=clearAllSelected;
+window.openMultiSheet=openMultiSheet;
+window.toggleMulti=toggleMulti;
 </script>
 </body>
 </html>
