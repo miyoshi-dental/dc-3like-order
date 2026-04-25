@@ -842,7 +842,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);
   </div>
 </div>
 
-<script type="module">
+<script>
 /* ── LAB CONFIG ── */
 const LAB = {
   name:'dcサンライク',
@@ -1154,20 +1154,36 @@ function tick(){
 function v(id){ return document.getElementById(id)?.value.trim(); }
 
 /* ── FIREBASE 初期化 ── */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+// Firebase SDKをCDNから読み込み（グローバル変数として使用）
+let db = null;
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBx5HX54j__fH_ZDhGJOLLaqgdHRFSxdmA",
-  authDomain: "dc-3like-order.firebaseapp.com",
-  projectId: "dc-3like-order",
-  storageBucket: "dc-3like-order.firebasestorage.app",
-  messagingSenderId: "982264143845",
-  appId: "1:982264143845:web:37ebd669f8ed6d9fa2d90c"
-};
+async function initFirebase() {
+  try {
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const { getFirestore, collection, addDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
 
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
+    const firebaseConfig = {
+      apiKey: "AIzaSyBx5HX54j__fH_ZDhGJOLLaqgdHRFSxdmA",
+      authDomain: "dc-3like-order.firebaseapp.com",
+      projectId: "dc-3like-order",
+      storageBucket: "dc-3like-order.firebasestorage.app",
+      messagingSenderId: "982264143845",
+      appId: "1:982264143845:web:37ebd669f8ed6d9fa2d90c"
+    };
+
+    const firebaseApp = initializeApp(firebaseConfig);
+    db = getFirestore(firebaseApp);
+
+    // グローバルに保持
+    window._fbAddDoc = addDoc;
+    window._fbCollection = collection;
+    window._fbServerTimestamp = serverTimestamp;
+    console.log('Firebase初期化完了');
+  } catch(e) {
+    console.warn('Firebase初期化失敗:', e);
+  }
+}
+initFirebase();
 
 /* ── SUBMIT ── */
 function validate(){
@@ -1193,10 +1209,15 @@ async function submitOrder(){
 
   try {
     // Firestoreに保存
-    await addDoc(collection(db,'orders'),{
-      ...o,
-      serverCreatedAt: serverTimestamp(),
-    });
+    if(db && window._fbAddDoc) {
+      await window._fbAddDoc(window._fbCollection(db,'orders'),{
+        ...o,
+        serverCreatedAt: window._fbServerTimestamp(),
+      });
+      console.log('Firestore保存成功！');
+    } else {
+      throw new Error('Firebase未初期化');
+    }
 
     // ローカルにも保存（管理画面用）
     const arr=JSON.parse(localStorage.getItem('dental-orders')||'[]');
