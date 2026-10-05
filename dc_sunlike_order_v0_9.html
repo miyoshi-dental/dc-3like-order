@@ -1,0 +1,2502 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
+<meta name="robots" content="noindex">
+<title>dc サンライク｜デジタルオーダーフォーム v0.9</title>
+<!--
+  dc サンライク デジタルオーダーFORM v0.9（試作）
+  1ファイル完結。サーバーなし。送信はデモ動作で、データはどこにも送られません（メールも送信しません）。
+  技工指示書のPDFを作るときだけ、PDFを組み立てるライブラリ（jsPDF）をCDNから読み込みます（PDFはブラウザの中で作り、入力内容は外へ送りません）。
+  コードの区分：LAB CONFIG / FORM / TOOTH CHART / CONNECTIONS / SCANNER / ATTACHMENTS / CONFIRMATION / PRINT / PDF
+-->
+<style>
+/* ==========================================================
+   基本設定（色はここで一括管理）
+   ========================================================== */
+:root {
+  --bg: #FFFFFF;          /* 背景 */
+  --main: #79D8D0;        /* メインカラー */
+  --main-deep: #2E8F87;   /* メインの濃色：選択枠・フォーカス枠 */
+  --main-ink: #1F6F69;    /* メインの文字色（白地で読める濃さ） */
+  --pale: #EEF9F8;        /* 淡い背景 */
+  --ink: #263238;         /* 基本文字 */
+  --ink-soft: #5B6B73;    /* 補足文字 */
+  --line: #D5E3E2;        /* 区切り線 */
+  --field: #7F9499;       /* 入力欄の枠 */
+  --link: #B7E4C7;        /* 連結表示 */
+  --link-deep: #4F9F70;   /* 連結表示の枠 */
+  --err: #D9534F;         /* 必須・エラー */
+  --err-ink: #B93A36;     /* エラー文字（白地で読める濃さ） */
+  --font: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.6;
+}
+[hidden] { display: none !important; }
+button, input, textarea { font: inherit; color: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+button, label { touch-action: manipulation; }   /* 連続タップで画面が拡大しないように */
+.wrap { max-width: 720px; margin: 0 auto; padding: 0 16px; }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+:focus-visible { outline: 3px solid var(--main-deep); outline-offset: 2px; }
+
+/* ==========================================================
+   ヘッダー
+   ========================================================== */
+.site-header { border-top: 6px solid var(--main); padding: 22px 0 6px; }
+.site-header h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .08em; color: var(--main-ink); }
+.site-header .brand { display: block; font-size: 26px; font-weight: 700; letter-spacing: .04em; line-height: 1.3; color: var(--ink); }
+.proto-note { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-soft); }
+
+/* ==========================================================
+   セクション・入力欄
+   ========================================================== */
+.sec { margin-top: 34px; }
+.sec > h2 {
+  margin: 0 0 18px; padding: 9px 14px;
+  font-size: 17px; font-weight: 700; line-height: 1.4;
+  background: var(--pale); border-left: 6px solid var(--main);
+}
+.field { margin-bottom: 18px; }
+.field > label, .field > .label { display: block; margin-bottom: 6px; font-size: 14.5px; font-weight: 700; }
+.req {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 3px;
+  background: var(--err); color: #fff; font-size: 11px; font-weight: 700; line-height: 1.5; vertical-align: 2px;
+}
+.opt { margin-left: 6px; font-size: 12px; font-weight: 400; color: var(--ink-soft); }
+.hint { margin: 6px 0 0; font-size: 13px; color: var(--ink-soft); }
+input[type="text"], input[type="email"], input[type="date"], input[type="time"], textarea {
+  display: block; width: 100%; min-width: 0; max-width: 100%; min-height: 50px; padding: 11px 12px;
+  background: #fff; border: 1.5px solid var(--field); border-radius: 8px;
+  font-size: 16px; line-height: 1.5;
+  -webkit-appearance: none; appearance: none;
+}
+input[type="date"], input[type="time"] { text-align: left; }
+input::-webkit-date-and-time-value { text-align: left; }
+textarea { min-height: 150px; resize: vertical; }
+textarea.ta-short { min-height: 98px; }   /* 補綴物名：最初は3行ぶん。入力が増えると自動で縦に伸びる */
+input:focus, textarea:focus { outline: 3px solid var(--main); outline-offset: 0; border-color: var(--main-deep); }
+.is-invalid input, .is-invalid textarea { border-color: var(--err); border-width: 2px; }
+.err { margin: 6px 0 0; font-size: 13.5px; font-weight: 700; color: var(--err-ink); }
+.err::before { content: "！ "; }
+.row { display: grid; grid-template-columns: 1fr; gap: 0 16px; }
+.row > .field { min-width: 0; }
+.row.two-sp { grid-template-columns: 1fr 1fr; }
+@media (max-width: 359px) { .row.two-sp.dates { grid-template-columns: 1fr; } }   /* 幅の狭い端末では日付と時間を縦に並べる */
+@media (min-width: 600px) { .row.two { grid-template-columns: 1fr 1fr; } }
+
+/* 性別（押して選択・もう一度押すと解除） */
+.chips { display: flex; gap: 8px; }
+.chip {
+  flex: 1; min-height: 50px; padding: 0 10px;
+  background: #fff; border: 1.5px solid var(--field); border-radius: 8px;
+  font-size: 16px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--main); border: 2px solid var(--main-deep); font-weight: 700; }
+.with-unit { display: flex; align-items: center; gap: 8px; }
+.with-unit input { flex: 1; min-width: 0; }
+
+/* 日付：数字で直接入力（7桁・8桁）＋右のボタンでカレンダー選択。時刻は数字入力（24時間表記） */
+.datebox { display: flex; gap: 8px; }
+.datebox .date-text { flex: 1; }
+.cal {
+  position: relative; flex: none; display: flex; align-items: center; justify-content: center;
+  width: 50px; height: 50px; background: #fff; border: 1.5px solid var(--field); border-radius: 8px;
+}
+.cal svg { width: 24px; height: 24px; }
+.cal:focus-within { outline: 3px solid var(--main); border-color: var(--main-deep); }
+/* 本物の日付入力を透明にしてボタンに重ね、押すとブラウザ標準のカレンダーが開くようにする */
+.cal .cal-native { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.cal .cal-native::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; cursor: pointer; }
+.sub-title { margin: 6px 0 10px; font-size: 14.5px; font-weight: 700; }
+
+/* ==========================================================
+   歯式（TOOTH CHART）と連結（CONNECTIONS）
+   スマホ：1顎を右側・左側の2段に分けて表示／PC：1顎16歯を1段で表示
+   各ボタンの位置は JS が --sp-c / --sp-r（スマホ）と --pc-c（PC）で指定
+   ========================================================== */
+.chart-help { margin: 0 0 12px; font-size: 13.5px; color: var(--ink-soft); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 14px; padding: 0; list-style: none; font-size: 12.5px; color: var(--ink-soft); }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.lg-tooth { width: 18px; height: 18px; border-radius: 4px; background: var(--main); border: 2px solid var(--main-deep); }
+.lg-ready { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid var(--main-deep); }
+.lg-pontic { display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; background: var(--pale); border: 2px dashed var(--main-deep); font-size: 10px; font-weight: 700; line-height: 1; color: var(--ink); }
+.lg-on { width: 28px; height: 12px; border-radius: 6px; background: var(--link); border: 1.5px solid var(--link-deep); }
+
+.jaw-block + .jaw-block { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.jaw-name { margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--main-ink); }
+.chart-sides { display: none; }
+.jaw { position: relative; display: grid; grid-template-columns: repeat(16, 1fr); }
+.qlabel { grid-column: 1 / -1; grid-row: var(--sp-r); margin: 0 0 3px 2px; font-size: 12px; color: var(--ink-soft); }
+.tooth {
+  grid-column: var(--sp-c) / span 2; grid-row: var(--sp-r);
+  height: 46px; margin: 0 1.5px; padding: 0; min-width: 0;
+  background: #fff; border: 1.5px solid #9FB3B6; border-radius: 7px;
+  font-size: 15px; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.tooth { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
+.tooth .p-mark { display: none; font-size: 12px; font-weight: 700; }
+/* 通常選択＝塗り＋実線枠 ／ ポンティック＝淡色＋点線枠＋「P」 */
+.tooth[data-state="on"] { background: var(--main); border: 2.5px solid var(--main-deep); font-weight: 700; }
+.tooth[data-state="pontic"] { background: var(--pale); border: 2.5px dashed var(--main-deep); font-weight: 700; }
+.tooth[data-state="pontic"] .p-mark { display: block; }
+.link {
+  grid-column: var(--sp-c) / span 2; grid-row: var(--sp-r);
+  display: flex; justify-content: center; align-items: flex-start;
+  height: 34px; padding: 2px 0 0; margin: 0; min-width: 0;
+  background: none; border: 0; cursor: pointer;
+}
+.link-mark { display: block; width: 6px; height: 6px; margin-top: 8px; border-radius: 50%; background: #B4C4C6; }
+.link.is-ready .link-mark { width: 20px; height: 20px; margin-top: 1px; background: #fff; border: 2px solid var(--main-deep); }
+.link.is-on .link-mark { width: calc(100% - 4px); height: 16px; margin-top: 0; border-radius: 8px; background: var(--link); border: 2px solid var(--link-deep); }
+.mid-num, .mid-cap { font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+/* スマホ：正中（11-21／41-31）の連結は、右側と左側の段の間に名前付きで表示 */
+@media (max-width: 699px) {
+  .link.mid {
+    grid-column: 1 / -1; justify-self: center; align-items: center; gap: 8px;
+    height: 40px; padding: 0 16px; margin: 2px 0 10px;
+    border: 1px dashed #9FB3B6; border-radius: 20px;
+  }
+  .link.mid .link-mark { width: 20px; height: 20px; margin-top: 0; background: #fff; border: 2px solid #9FB3B6; }
+  .link.mid.is-ready .link-mark { border-color: var(--main-deep); }
+  .link.mid.is-on { border-style: solid; border-color: var(--link-deep); }
+  .link.mid.is-on .link-mark { width: 40px; height: 16px; border-radius: 8px; background: var(--link); border: 2px solid var(--link-deep); }
+  .link.mid.is-on .mid-num { color: var(--ink); font-weight: 700; }
+}
+/* PC：1顎を1段（16歯）で表示。正中に縦線 */
+@media (min-width: 700px) {
+  .chart-sides { display: flex; justify-content: space-between; margin: 0 2px 2px; font-size: 12px; color: var(--ink-soft); }
+  .jaw { grid-template-columns: repeat(32, 1fr); }
+  .jaw::after { content: ""; position: absolute; left: 50%; top: -4px; height: 54px; border-left: 2px solid var(--ink); transform: translateX(-1px); pointer-events: none; }
+  .qlabel, .mid-num, .mid-cap { display: none; }
+  .tooth { grid-column: var(--pc-c) / span 2; grid-row: 1; }
+  .link { grid-column: var(--pc-c) / span 2; grid-row: 2; }
+}
+.chart-summary { margin: 14px 0 0; padding: 10px 12px; background: var(--pale); border-radius: 8px; font-size: 14px; }
+.chart-summary dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+.chart-summary dt { color: var(--ink-soft); }
+.chart-summary dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+/* ==========================================================
+   スキャナー選択（SCANNER）
+   ========================================================== */
+fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+legend { padding: 0; margin-bottom: 8px; font-size: 14.5px; font-weight: 700; }
+.options { display: grid; gap: 8px; }
+.option { position: relative; display: block; }
+.option input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.option span {
+  display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 10px 14px;
+  background: #fff; border: 1.5px solid var(--field); border-radius: 8px;
+}
+.option span::before { content: ""; flex: none; width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 2px solid var(--field); }
+.option input:checked + span { background: var(--pale); border-color: var(--main-deep); box-shadow: inset 0 0 0 1px var(--main-deep); font-weight: 700; }
+.option input:checked + span::before { border-color: var(--main-deep); box-shadow: inset 0 0 0 4px #fff; background: var(--main-deep); }
+.option input:focus-visible + span { outline: 3px solid var(--main-deep); outline-offset: 2px; }
+/* 横並びの選択肢（時間帯・受注形態・歯髄・写真）：押した項目を塗りと太枠で示す */
+.options.cols-2 { grid-template-columns: 1fr 1fr; }
+.options.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.options.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.options.seg .option span { justify-content: center; min-height: 50px; padding: 8px 6px; text-align: center; }
+.options.seg .option span::before { display: none; }
+.options.seg .option input:checked + span { background: var(--main); }
+/* チェックボックス（預り品）：四角いしるし */
+.option input[type="checkbox"] + span::before { border-radius: 5px; }
+/* 選択式の必須項目が未選択のとき：選択肢の枠を赤くする（枠の太さは変えない） */
+.is-invalid .option span { border-color: var(--err); box-shadow: inset 0 0 0 1px var(--err); }
+.soft-note { margin: 10px 0 0; font-size: 13.5px; color: var(--ink-soft); }
+.note { margin: 12px 0 0; padding: 10px 14px; background: var(--pale); border-radius: 8px; font-size: 14px; }
+
+/* ==========================================================
+   確認・同意：行のどこを押してもチェック。リンク風の文字だけは、すぐ下に本文を開閉する
+   ========================================================== */
+.agree { position: relative; touch-action: manipulation; }   /* 連続タップで画面が拡大しないように */
+.agree > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.agree > p {
+  display: flex; align-items: center; gap: 12px; min-height: 52px; margin: 0; padding: 10px 14px;
+  background: #fff; border: 1.5px solid var(--field); border-radius: 8px;
+}
+.agree > p::before { content: ""; flex: none; width: 20px; height: 20px; border-radius: 5px; background: #fff; border: 2px solid var(--field); }
+.agree > input:checked + p { background: var(--pale); border-color: var(--main-deep); box-shadow: inset 0 0 0 1px var(--main-deep); }
+.agree > input:checked + p::before { border-color: var(--main-deep); box-shadow: inset 0 0 0 4px #fff; background: var(--main-deep); }
+.agree > input:focus-visible + p { outline: 3px solid var(--main-deep); outline-offset: 2px; }
+.is-invalid .agree > p { border-color: var(--err); box-shadow: inset 0 0 0 1px var(--err); }   /* 枠の太さは変えない（行の折り返しが変わらないように） */
+.doc-link {
+  position: relative; z-index: 1; margin: -8px 0 -3px; padding: 8px 0 3px; background: none; border: 0;   /* 押せる範囲を上に広げる。下の行にはかぶせない */
+  font-weight: 700; color: var(--main-ink); text-align: left; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.nb { display: inline-block; }   /* 文節の途中で折り返さない（確認・同意の文、完了画面の案内） */
+.doc { margin: 8px 0 0; padding: 12px 14px; background: var(--pale); border-radius: 8px; font-size: 14px; }
+.doc h3 { margin: 0 0 6px; font-size: 14px; }
+.doc p, .doc li { margin: 0 0 8px; }
+.doc ul { margin: 0; padding: 0; list-style: none; }
+.doc li { padding-left: 1em; text-indent: -1em; }
+.doc > :last-child, .doc li:last-child { margin-bottom: 0; }
+
+/* ==========================================================
+   添付（ATTACHMENTS）：スキャンデータ・症例画像
+   ========================================================== */
+.attach { margin-top: 16px; }
+.attach-title { margin: 0 0 8px; font-size: 14.5px; font-weight: 700; }
+.drop { padding: 16px; border: 2px dashed #9FB3B6; border-radius: 10px; text-align: center; }
+.drop.is-over { border-color: var(--main-deep); background: var(--pale); }
+.drop-text { display: none; margin: 10px 0 0; font-size: 13.5px; color: var(--ink-soft); }
+@media (hover: hover) and (pointer: fine) { .drop-text { display: block; } }
+.btn-file {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 50px; padding: 0 22px;
+  background: #fff; border: 1.5px solid var(--main-deep); border-radius: 8px; font-weight: 700; cursor: pointer;
+}
+.visually-hidden:focus-visible + .btn-file { outline: 3px solid var(--main-deep); outline-offset: 2px; }
+.file-list { list-style: none; margin: 10px 0 0; padding: 0; }
+.file-list li { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 4px; border-bottom: 1px solid var(--line); }
+.file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.file-del { flex: none; width: 44px; height: 44px; padding: 0; background: none; border: 0; border-radius: 8px; font-size: 22px; line-height: 1; color: var(--ink-soft); cursor: pointer; }
+.file-msg { margin: 8px 0 0; font-size: 13.5px; font-weight: 700; color: var(--err-ink); }
+.thumbs { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (min-width: 600px) { .thumbs { grid-template-columns: repeat(5, 1fr); } }
+.thumbs li { min-width: 0; }
+.thumb, .thumb-fallback { display: block; width: 100%; aspect-ratio: 1; border-radius: 8px; border: 1px solid var(--line); background: var(--pale); }
+.thumb { object-fit: cover; }
+.thumb-fallback { display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--ink-soft); }
+.thumb-name { display: block; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--ink-soft); }
+.thumb-del { width: 100%; min-height: 40px; margin-top: 4px; background: #fff; border: 1px solid var(--field); border-radius: 6px; font-size: 13px; cursor: pointer; }
+
+/* ==========================================================
+   ボタン・確認画面（CONFIRMATION）・送信完了
+   ========================================================== */
+main { padding-bottom: 72px; }
+.actions { display: grid; gap: 12px; margin-top: 40px; }
+.actions.two { grid-template-columns: 1fr 1fr; }
+.btn {
+  display: flex; align-items: center; justify-content: center; width: 100%; min-height: 56px; padding: 8px 20px;
+  border-radius: 10px; font-size: 17px; font-weight: 700; text-align: center; cursor: pointer;
+}
+.btn-primary { background: var(--main); border: 2px solid var(--main-deep); }
+.btn-secondary { background: #fff; border: 1.5px solid var(--field); }
+@media (hover: hover) {
+  .btn-primary:hover { background: #6ACFC6; }
+  .btn-secondary:hover { background: var(--pale); }
+}
+.btn:disabled { opacity: .6; cursor: default; }                 /* PDFを作成中のボタン */
+.btn-primary:disabled { background: var(--main); }
+.form-msg { margin: 0; text-align: center; font-size: 14px; font-weight: 700; color: var(--err-ink); }
+.view-title { margin: 30px 0 4px; font-size: 21px; line-height: 1.4; }
+.view-title:focus { outline: none; }
+.view-lead { margin: 0; font-size: 14px; color: var(--ink-soft); }
+.confirm-list { margin: 18px 0 0; border-top: 1px solid var(--line); }
+.confirm-list > div { display: grid; grid-template-columns: 6.6em 1fr; gap: 10px; padding: 11px 2px; border-bottom: 1px solid var(--line); }
+.confirm-list > div.wide { grid-template-columns: 11.6em 1fr; }   /* 同意の行：見出しが長いので列を広く */
+.confirm-list dt { padding-top: 3px; font-size: 13px; color: var(--ink-soft); }
+.confirm-list dd { margin: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; white-space: pre-wrap; }
+.confirm-list dd.is-empty { font-weight: 400; color: var(--ink-soft); }
+.confirm-list .sub { display: block; font-size: 13.5px; font-weight: 400; color: var(--ink-soft); }
+/* 確認画面の注意：送信は止めないが、送信ボタンのすぐ上で強く知らせる */
+.confirm-list dd.is-warn { color: var(--err-ink); }
+.confirm-warn { margin: 20px 0 0; padding: 12px 14px; border: 2px solid var(--err); border-radius: 8px; font-size: 14.5px; font-weight: 700; color: var(--err-ink); }
+.confirm-warn::before { content: "！ "; }
+.confirm-warn:not([hidden]) + .actions { margin-top: 16px; }   /* 注意が出ているときだけ、ボタンとの間を詰める */
+.done { padding-top: 40px; text-align: center; }
+.done-mark { display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; margin: 0 auto 16px; border-radius: 50%; background: var(--main); }
+.done-mark::after { content: ""; width: 15px; height: 29px; border: solid var(--ink); border-width: 0 5px 5px 0; transform: translateY(-3px) rotate(45deg); }
+.done .view-title { margin-top: 0; }
+.done-lead { max-width: 30em; margin: 12px auto 0; font-size: 15px; }
+.done-note { max-width: 30em; margin: 10px auto 0; font-size: 13.5px; color: var(--ink-soft); }
+.text-btn { margin-top: 18px; padding: 12px; background: none; border: 0; font-size: 15px; font-weight: 700; color: var(--main-ink); text-decoration: underline; cursor: pointer; }
+
+/* ==========================================================
+   印刷（PRINT）：技工指示書
+   現行の紙の指示書（枠の実寸 約120mm×174mm）と同じ構成で版面を組み、
+   印刷時に A5 いっぱい（約138×200mm、用紙の余白は約5mm）へ拡大する。画面上では画面外に置き、印刷時だけ表示する。
+   ========================================================== */
+#printArea { position: fixed; left: -10000px; top: 0; width: 210mm; visibility: hidden; --k: 1.15; }   /* --k＝版面の拡大率 */
+/* Safari系（iPhone含む）は印刷が約6.7%大きく出るため、その分を差し引いて同じ仕上がり寸法にする */
+html.wk-print #printArea { --k: 1.0781; }
+/* PDF用：指示書を等倍のまま画面の外に組み、位置を読み取って画像に描く（作り終えたら消す）。OSのハイコントラスト表示でも、紙と同じ白地に黒で組む */
+#pdfStage { position: fixed; left: -10000px; top: 0; width: 120mm; forced-color-adjust: none; }
+.sheet {
+  width: 120mm; height: 174mm; flex: none; display: flex; flex-direction: column; overflow: hidden;
+  background: #fff; color: #000; font-family: var(--font); font-size: 8pt; line-height: 1.3; text-align: left;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+/* .fit＝枠に合わせて文字を縮める欄。縮めても入らない分は「…」で切れたことが分かるようにする */
+.sheet .fit { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet .fit.is-wrapped { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--lines, 2); white-space: normal; overflow-wrap: anywhere; line-height: 1.15; }
+/* タイトル行：上を2穴パンチで綴じても、穴が下の枠線にかからない高さにしてある */
+.sh-title { flex: none; height: 8mm; line-height: 8mm; text-align: center; font-size: 13.5pt; font-weight: 700; letter-spacing: .08em; }
+
+/* 医院欄＋発注技工所名 */
+.sh-top { flex: none; display: grid; grid-template-columns: 59mm 5mm 1fr; height: 23mm; margin-top: 1.5mm; border: .25mm solid #000; }
+.sh-clinic { display: flex; flex-direction: column; justify-content: space-around; min-width: 0; padding: 1mm 2mm 1mm 3mm; }
+.sh-kv { display: flex; align-items: baseline; gap: 2mm; }
+.sh-kv .k { flex: none; width: 11mm; font-size: 8pt; font-weight: 700; }
+.sh-kv .v { flex: 1; min-width: 0; max-height: 6.6mm; font-size: 10pt; }
+.sh-kv .v.addr { font-size: 8pt; }
+.sh-vert { display: flex; align-items: center; justify-content: center; border-left: .25mm solid #000; border-right: .25mm solid #000; font-size: 7pt; font-weight: 700; }
+.sh-vert span { display: block; width: 1em; line-height: 1.3; text-align: center; word-break: break-all; }
+.sh-lab { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: .8mm 1.2mm .8mm 1.8mm; font-size: 6.8pt; line-height: 1.38; }
+.sh-lab .lab-name { margin-bottom: .5mm; font-size: 11.5pt; font-weight: 700; line-height: 1.25; }
+.sh-lab .lab-num { font-weight: 700; }
+
+/* 枠の共通：表（table）は使わず、grid と通常の枠線で組む。
+   高さに枠線を含めて固定するので、ブラウザによって枠の高さがずれない（Safariの印刷対策） */
+.sh-row { flex: none; display: grid; border: .25mm solid #000; }
+.sh-row > div { min-width: 0; min-height: 0; border-left: .25mm solid #000; }
+.sh-row > div:first-child { border-left: 0; }
+.sh-row .th { display: flex; align-items: center; justify-content: center; font-size: 8pt; font-weight: 700; }
+
+/* 発行年月日・印象日・納品希望日・ラボ使用欄 */
+.sh-dates { grid-template-columns: 20mm 39mm 45.5mm 1fr; grid-template-rows: 1fr 1fr 1fr; height: 18mm; margin-top: 1.2mm; }
+.sh-dates .r3c1 { grid-area: 3 / 1; border-left: 0; border-top: .25mm solid #000; }
+.sh-dates .r3c2 { grid-area: 3 / 2; border-top: .25mm solid #000; }
+.sh-dates .r1c1 { grid-area: 1 / 1; }
+.sh-dates .r1c2 { grid-area: 1 / 2; }
+.sh-dates .r2c1 { grid-area: 2 / 1; border-left: 0; border-top: .25mm solid #000; }
+.sh-dates .r2c2 { grid-area: 2 / 2; border-top: .25mm solid #000; }
+.sh-dates .ymd { display: flex; align-items: center; justify-content: flex-end; font-size: 9pt; }
+.ymd-in { display: flex; justify-content: flex-end; align-items: baseline; padding-right: 1.5mm; }
+.ymd-in b { display: inline-block; min-width: 5.4mm; padding-right: .8mm; font-weight: 400; text-align: right; }
+.ymd-in b.y { min-width: 9.5mm; }
+.ymd-in .slot { display: inline-block; width: 6mm; font-size: 8pt; font-weight: 700; text-align: right; }   /* AM／PM（空でも幅を取り、3行の年月日をそろえる） */
+.ymd-in i { font-style: normal; font-size: 7.5pt; font-weight: 700; }
+.sh-dates .due { grid-area: 1 / 3 / 4 / 4; margin: -.25mm 0; border: .6mm solid #000; }   /* 太枠：セット日時 */
+.due-h { height: 4mm; line-height: 3.8mm; border-bottom: .25mm solid #000; text-align: center; font-size: 7pt; font-weight: 700; }
+.due-b { padding-top: 1.2mm; font-size: 9.5pt; line-height: 1.6; }
+.due-b .ymd-in { padding-right: 2.5mm; }
+.due-b .hm { justify-content: center; padding-right: 0; }
+.sh-dates .labuse { grid-area: 1 / 4 / 4 / 5; border-left: 0; }
+.labuse .h { height: 4mm; line-height: 3.8mm; border-bottom: .25mm solid #000; text-align: center; font-size: 6.2pt; }
+.labuse .b { height: 13mm; line-height: 13mm; text-align: center; font-size: 14pt; }
+
+/* 受注形態・患者名・預り品 */
+.sh-line { grid-template-columns: 20mm 1fr; height: 6.2mm; margin-top: 1.2mm; }
+.sh-line .td { display: flex; align-items: center; padding: 0 3mm; overflow: hidden; font-size: 8pt; font-weight: 700; white-space: nowrap; }
+.sh-line.center .td { justify-content: center; }
+.sh-line.sh-patient { grid-template-columns: 19.65mm 1fr; height: 10.5mm; margin-top: 1mm; border-width: .6mm; }   /* 太枠 */
+.pt { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 2mm; }
+.pt .pname { flex: 1; min-width: 0; max-height: 8.6mm; font-size: 11.5pt; font-weight: 400; text-align: center; }
+.pt .sama { flex: none; font-size: 9.5pt; }
+.pt .sex { flex: none; margin-left: 5mm; font-size: 8pt; }
+.pt .age { flex: none; width: 11mm; margin-left: 4mm; font-size: 11pt; font-weight: 400; text-align: right; }
+.pt .sai { flex: none; font-size: 9.5pt; }
+.circ { display: inline-block; min-width: 1.5em; margin: 0 -.2em; padding: 0 .15em; border: .3mm solid #000; border-radius: 50%; text-align: center; }
+.circw { display: inline-block; margin: 0 -.4mm; padding: 0 1.1mm; border: .3mm solid #000; border-radius: 3mm; }   /* 選択した語を丸で囲む（受注形態・預り品） */
+/* 預り品：枠は紙の指示書と同じ。丸囲みが切れないよう余白を取り、「他（ ）」は残りの幅をすべて使う */
+.sh-line .td.keep-td { padding: 0 2mm 0 2.4mm; overflow: visible; }
+.keep { flex: 1; min-width: 0; display: flex; align-items: center; white-space: nowrap; }
+.keep .circw { margin: 0 -.35mm; padding: 0 .9mm; }
+.keep .dot { flex: none; display: flex; justify-content: center; width: .75em; }   /* 「・」の左右の空きを詰める */
+.keep .pr { flex: none; margin: 0 .3mm; font-size: 9pt; font-weight: 400; }        /* （ ） */
+.keep-n { flex: none; min-width: 4.2mm; padding: 0 .4mm; font-weight: 400; text-align: center; }   /* トレーの個数 */
+.keep-t { flex: 1; min-width: 0; max-height: 5.5mm; padding: 0 1mm; font-weight: 400; }             /* 他（ ）の中身 */
+
+/* 補綴物名／シェード・使用材料／写真
+   補綴物名は複数行。4行までは同じ高さ、それ以上は枠が下に伸びる（行は省略しない） */
+.sh-pros { grid-template-columns: 59mm 45.5mm 1fr; min-height: 21.4mm; margin-top: 1.2mm; }
+.sh-pros > div:first-child { display: flex; }
+.pbox { flex: 1; min-width: 0; padding: 1mm 2mm .8mm 3mm; display: flex; flex-direction: column; overflow: hidden; }
+.pbox .pk { flex: none; font-size: 8pt; font-weight: 700; }
+.pbox .pv { flex: 1; min-height: 0; padding: .3mm 0 0 2mm; font-size: 9pt; }
+.pbox .pv.multi { flex: none; line-height: 1.2; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* シェード・使用材料：1つの枠を上下2段に分ける。この枠は高さを決めない（高さは補綴物名の行数で決まる） */
+.sh-pros > .duo { position: relative; }
+.duo-in { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: flex; flex-direction: column; }
+.duo .pbox { flex: 1 1 0; min-height: 0; padding: .8mm 2mm .5mm 3mm; }
+.duo .pbox + .pbox { border-top: .25mm solid #000; }
+.photo .h { height: 5mm; line-height: 4.8mm; border-bottom: .25mm solid #000; text-align: center; font-size: 8pt; font-weight: 700; }
+.photo .b { padding-top: 1.6mm; text-align: center; font-size: 8pt; font-weight: 700; line-height: 1.5; }
+.photo .n { display: block; font-size: 7pt; font-weight: 400; }
+
+/* 下段。左：設計／指示事項のチェックと歯列図 ／ 右：部位（歯式）と設計・製作指示
+   最下段は左にデータ1行、右にラボ使用欄（ハンコ用）。指示欄はラボ使用欄をよけてL字に広がる
+   面積の優先順：設計・製作指示 ＞ 部位 ＞ 歯列図 ＞ ラボ使用欄 */
+.sh-bottom { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: 33mm 1fr; column-gap: 2.5mm; margin-top: 2mm; }
+.sh-design, .sh-right { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding-bottom: 4.8mm; }   /* 下の4.8mmは最下段のデータ行のぶん */
+.bh { flex: none; font-size: 8.5pt; font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
+.cbs { flex: none; display: grid; grid-template-columns: auto auto; justify-content: start; gap: 1.4mm 4mm; margin: 1.4mm 0 0 1.5mm; font-size: 8pt; font-weight: 700; }
+.cbs span { display: flex; align-items: center; gap: 1.8mm; }
+.cb { position: relative; display: inline-block; width: 2.6mm; height: 2.6mm; border: .25mm solid #000; }
+.cb.on::after { content: ""; position: absolute; left: .7mm; top: 0; width: .8mm; height: 1.6mm; border: solid #000; border-width: 0 .45mm .45mm 0; transform: rotate(45deg); }
+.arch { flex: 1; min-height: 0; margin-top: 1mm; }
+.arch svg, .bui svg { display: block; width: 100%; height: 100%; }
+/* 部位：歯式は右寄せ。見出しは【設計／指示事項】と同じ高さで、歯式のすぐ左に置く */
+.bui-row { flex: none; display: flex; align-items: flex-start; justify-content: flex-end; gap: 2mm; height: 13.6mm; }
+.bui { flex: none; width: 60.8mm; height: 13.6mm; }
+/* 設計・製作指示：医院が入力した本文だけを印字する。右下のラボ使用欄をよけて文字を流す */
+.sh-inst { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: .8mm; border-top: .25mm solid #000; }
+.sh-note { flex: 1; min-height: 0; margin-top: .9mm; overflow: hidden; font-size: 8.5pt; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sh-note .sp { float: right; width: 0; height: calc(100% - 13mm); }         /* 下の .hole を欄の一番下まで押し下げる */
+.sh-note .hole { float: right; clear: right; width: 30mm; height: 13mm; }   /* ラボ使用欄と重なる右下を空けておく */
+.sh-note .over { display: block; font-size: 6.5pt; font-weight: 700; }
+/* 最下段：スキャナー・スキャンデータ・症例画像（左寄せ1行）と、ラボ使用欄（右。ハンコが押せる大きさ） */
+.sh-data { position: absolute; left: 0; bottom: 0; width: calc(100% - 30.5mm); padding-top: .6mm; border-top: .25mm solid #000; font-size: 7pt; }
+.sh-data b { font-weight: 700; }
+.sh-labuse2 { position: absolute; right: 0; bottom: 0; display: flex; flex-direction: column; width: 28mm; height: 16mm; border: .25mm solid #000; background: #fff; }
+.sh-labuse2 .h { flex: none; height: 3.4mm; line-height: 3.2mm; border-bottom: .25mm solid #000; text-align: center; font-size: 6pt; }
+.sh-labuse2 .b { flex: 1; display: grid; grid-template-columns: 1fr 1fr; }
+.sh-labuse2 .b i { border-right: .25mm solid #000; }
+.sh-labuse2 .b i:last-child { border-right: 0; }
+
+/* 印刷時の拡大：版面（120×174mm）を --k 倍して A5 に合わせる */
+.pp-fit { position: relative; flex: none; width: calc(120mm * var(--k)); height: calc(174mm * var(--k)); }
+.pp-fit > .sheet { position: absolute; left: 0; top: 0; transform-origin: 0 0; transform: scale(var(--k)); }
+/* A4・2分割：切るとA5縦が2枚になるよう、各面を90°回して上下に置く */
+.rot { position: relative; flex: none; width: calc(174mm * var(--k)); height: calc(120mm * var(--k)); }
+.rot > .sheet { position: absolute; left: 0; top: 0; transform-origin: 0 0; transform: translate(0, calc(120mm * var(--k))) rotate(-90deg) scale(var(--k)); }
+
+
+@media print {
+  html.print-sheet, html.print-sheet body { height: 100%; margin: 0; padding: 0; background: #fff; }
+  html.print-sheet body > *:not(#printArea) { display: none !important; }
+  html.print-sheet #printArea { position: static; visibility: visible; width: auto; height: 100%; overflow: hidden; }
+  .pp-a5 { height: 100%; min-height: calc(174mm * var(--k)); display: flex; align-items: center; justify-content: center; }
+  .pp-a4x2 { height: 100%; display: flex; flex-direction: column; }
+  .pp-half { flex: 1 1 0; min-height: calc(120mm * var(--k) + 2mm); display: flex; align-items: center; justify-content: center; }
+  .pp-cut { flex: none; height: 0; border-top: .2mm dashed #777; }
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <h1><span class="brand">dc サンライク</span>デジタルオーダーフォーム</h1>
+    <p class="proto-note">試作版 v0.9（送信はデモ動作です。入力内容や添付ファイルは、どこにも送信されません）</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ================= 入力フォーム（FORM） ================= -->
+  <form id="viewForm" novalidate>
+
+    <section class="sec" aria-labelledby="h-clinic">
+      <h2 id="h-clinic">医院情報</h2>
+      <div class="field" id="field-clinicName">
+        <label for="clinicName">歯科医院名<span class="req">必須</span></label>
+        <input type="text" id="clinicName" autocomplete="organization" aria-describedby="err-clinicName">
+        <p class="err" id="err-clinicName" hidden></p>
+      </div>
+      <div class="field" id="field-clinicAddress">
+        <label for="clinicAddress">医院所在地<span class="req">必須</span></label>
+        <input type="text" id="clinicAddress" autocomplete="street-address" aria-describedby="err-clinicAddress">
+        <p class="err" id="err-clinicAddress" hidden></p>
+      </div>
+      <div class="field" id="field-doctorName">
+        <label for="doctorName">担当歯科医師<span class="req">必須</span></label>
+        <input type="text" id="doctorName" aria-describedby="err-doctorName">
+        <p class="err" id="err-doctorName" hidden></p>
+      </div>
+      <!-- 確認メール送信先：Web受注の受付確認用。技工指示書には印刷しない -->
+      <p class="sub-title">確認メール送信先</p>
+      <div class="field" id="field-email">
+        <label for="email">メールアドレス<span class="req">必須</span></label>
+        <input type="email" id="email" autocomplete="email" autocapitalize="off" spellcheck="false" aria-describedby="err-email">
+        <p class="err" id="err-email" hidden></p>
+      </div>
+      <div class="field" id="field-emailConfirm">
+        <label for="emailConfirm">メールアドレス（確認用）<span class="req">必須</span></label>
+        <input type="email" id="emailConfirm" autocomplete="email" autocapitalize="off" spellcheck="false" aria-describedby="err-emailConfirm">
+        <p class="err" id="err-emailConfirm" hidden></p>
+        <p class="hint">オーダー受付完了の確認メールと、必要な場合のご連絡に使用します。</p>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-patient">
+      <h2 id="h-patient">患者情報</h2>
+      <div class="field" id="field-patientName">
+        <label for="patientName">患者名<span class="req">必須</span></label>
+        <input type="text" id="patientName" autocomplete="off" aria-describedby="err-patientName">
+        <p class="err" id="err-patientName" hidden></p>
+      </div>
+      <div class="row two-sp">
+        <div class="field">
+          <span class="label" id="l-sex">性別</span>
+          <div class="chips" role="group" aria-labelledby="l-sex">
+            <button type="button" class="chip" data-sex="男" aria-pressed="false">男</button>
+            <button type="button" class="chip" data-sex="女" aria-pressed="false">女</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="age">年齢</label>
+          <div class="with-unit">
+            <input type="text" id="age" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off">
+            <span>歳</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 日付は「数字で入力（例：20261010／2026926）」か「右のボタンでカレンダー」のどちらでも -->
+    <section class="sec" aria-labelledby="h-dates">
+      <h2 id="h-dates">日程</h2>
+      <p class="chart-help">日付は数字で入力できます（例：20261010）。右のボタンでカレンダーからも選べます。</p>
+        <div class="field" id="field-impressionDate">
+          <label for="impressionDate">印象日</label>
+          <div class="datebox">
+            <input type="text" id="impressionDate" class="date-text" inputmode="numeric" autocomplete="off" placeholder="例：20261010" aria-describedby="err-impressionDate">
+            <span class="cal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><input type="date" class="cal-native" id="impressionDateNative" tabindex="-1" aria-label="印象日をカレンダーから選ぶ"></span>
+          </div>
+          <p class="err" id="err-impressionDate" hidden></p>
+        </div>
+        <div class="field" id="field-dueDate">
+          <label for="dueDate">納品希望日<span class="req">必須</span></label>
+          <div class="datebox">
+            <input type="text" id="dueDate" class="date-text" inputmode="numeric" autocomplete="off" placeholder="例：20261010" aria-describedby="err-dueDate">
+            <span class="cal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><input type="date" class="cal-native" id="dueDateNative" tabindex="-1" aria-label="納品希望日をカレンダーから選ぶ"></span>
+          </div>
+          <p class="err" id="err-dueDate" hidden></p>
+        </div>
+      <fieldset class="field">
+        <legend>納品の時間帯</legend>
+        <div class="options seg cols-3">
+          <label class="option"><input type="radio" name="dueSlot" value="" checked><span>指定なし</span></label>
+          <label class="option"><input type="radio" name="dueSlot" value="AM"><span>AM</span></label>
+          <label class="option"><input type="radio" name="dueSlot" value="PM"><span>PM</span></label>
+        </div>
+      </fieldset>
+      <p class="sub-title">セット日時</p>
+      <div class="row two">
+        <div class="field" id="field-setDate">
+          <label for="setDate">セット日<span class="req">必須</span></label>
+          <div class="datebox">
+            <input type="text" id="setDate" class="date-text" inputmode="numeric" autocomplete="off" placeholder="例：20261010" aria-describedby="err-setDate">
+            <span class="cal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><input type="date" class="cal-native" id="setDateNative" tabindex="-1" aria-label="セット日をカレンダーから選ぶ"></span>
+          </div>
+          <p class="err" id="err-setDate" hidden></p>
+        </div>
+        <div class="field" id="field-setTime">
+          <label for="setTime">セット時刻<span class="req">必須</span></label>
+          <input type="text" id="setTime" inputmode="numeric" autocomplete="off" placeholder="例：1430" aria-describedby="err-setTime">
+          <p class="err" id="err-setTime" hidden></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-order">
+      <h2 id="h-order">製作内容</h2>
+      <fieldset class="field" id="field-orderType" aria-describedby="err-orderType">
+        <legend>受注形態<span class="req">必須</span></legend>
+        <div class="options seg cols-4">
+          <label class="option"><input type="radio" name="orderType" value="完成"><span>完成</span></label>
+          <label class="option"><input type="radio" name="orderType" value="試適"><span>試適</span></label>
+          <label class="option"><input type="radio" name="orderType" value="再製"><span>再製</span></label>
+          <label class="option"><input type="radio" name="orderType" value="修正"><span>修正</span></label>
+        </div>
+        <p class="err" id="err-orderType" hidden></p>
+      </fieldset>
+      <div class="field" id="field-prosthesis">
+        <label for="prosthesis">補綴物名<span class="req">必須</span></label>
+        <textarea id="prosthesis" class="ta-short" rows="3" autocomplete="off" aria-describedby="err-prosthesis"></textarea>
+        <p class="err" id="err-prosthesis" hidden></p>
+      </div>
+      <div class="row two">
+        <div class="field">
+          <label for="material">使用材料</label>
+          <input type="text" id="material" autocomplete="off">
+        </div>
+        <div class="field" id="field-shade">
+          <label for="shade">シェード<span class="req">必須</span></label>
+          <input type="text" id="shade" autocomplete="off" aria-describedby="err-shade">
+          <p class="err" id="err-shade" hidden></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-items">
+      <h2 id="h-items">預り品</h2>
+      <div class="options cols-2" role="group" aria-labelledby="h-items">
+        <label class="option"><input type="checkbox" id="itemOpposing"><span>対合模型</span></label>
+        <label class="option"><input type="checkbox" id="itemBite"><span>バイト</span></label>
+        <label class="option"><input type="checkbox" id="itemTray"><span>トレー</span></label>
+        <label class="option"><input type="checkbox" id="itemReference"><span>参考模型</span></label>
+        <label class="option"><input type="checkbox" id="itemOther"><span>その他</span></label>
+      </div>
+      <div class="field" id="field-trayCount" hidden style="margin-top:14px">
+        <label for="trayCount">トレーの個数<span class="req">必須</span></label>
+        <div class="with-unit" style="max-width:160px">
+          <input type="text" id="trayCount" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" aria-describedby="err-trayCount">
+          <span>個</span>
+        </div>
+        <p class="err" id="err-trayCount" hidden></p>
+      </div>
+      <div class="field" id="field-otherItem" hidden style="margin-top:14px">
+        <label for="otherItem">その他の内容<span class="req">必須</span></label>
+        <input type="text" id="otherItem" autocomplete="off" aria-describedby="err-otherItem">
+        <p class="err" id="err-otherItem" hidden></p>
+      </div>
+    </section>
+
+    <!-- ================= 歯式（TOOTH CHART / CONNECTIONS） ================= -->
+    <section class="sec" aria-labelledby="h-chart">
+      <h2 id="h-chart">歯式<span class="req">必須</span></h2>
+      <p class="chart-help">歯をタップするたびに「選択 → ポンティック（P）→ 解除」と切り替わります。となり合う歯の間のしるしをタップすると連結、もう一度タップで解除です。</p>
+      <ul class="legend" aria-hidden="true">
+        <li><span class="lg-tooth"></span>選択した歯</li>
+        <li><span class="lg-pontic">P</span>ポンティック</li>
+        <li><span class="lg-ready"></span>連結できる歯間</li>
+        <li><span class="lg-on"></span>連結</li>
+      </ul>
+      <div class="field" id="field-teeth">
+        <div class="chart" id="toothChart"></div>
+        <p class="err" id="err-teeth" hidden></p>
+        <div class="chart-summary" aria-live="polite">
+          <dl>
+            <dt>選択歯</dt><dd id="sumTeeth">未選択</dd>
+            <dt>ポンティック</dt><dd id="sumPontics">なし</dd>
+            <dt>連結</dt><dd id="sumLinks">なし</dd>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-design">
+      <h2 id="h-design">設計・指示</h2>
+      <fieldset class="field">
+        <legend>歯髄</legend>
+        <div class="options seg cols-3">
+          <label class="option"><input type="radio" name="pulp" value="有髄"><span>有髄</span></label>
+          <label class="option"><input type="radio" name="pulp" value="無髄"><span>無髄</span></label>
+          <label class="option"><input type="radio" name="pulp" value="" checked><span>指定なし</span></label>
+        </div>
+      </fieldset>
+      <div class="field">
+        <label for="instructions">設計・製作指示</label>
+        <textarea id="instructions" rows="6"></textarea>
+      </div>
+    </section>
+
+    <!-- ================= デジタルデータ（SCANNER / ATTACHMENTS） ================= -->
+    <section class="sec" aria-labelledby="h-data">
+      <h2 id="h-data">デジタルデータ</h2>
+      <fieldset id="field-scanner" aria-describedby="err-scanner">
+        <legend>使用スキャナー<span class="req">必須</span></legend>
+        <div class="options">
+          <label class="option"><input type="radio" name="scanner" value="TRIOS"><span>TRIOS</span></label>
+          <label class="option"><input type="radio" name="scanner" value="iTero"><span>iTero</span></label>
+          <label class="option"><input type="radio" name="scanner" value="Medit"><span>Medit</span></label>
+          <label class="option"><input type="radio" name="scanner" value="その他"><span>その他</span></label>
+          <label class="option"><input type="radio" name="scanner" value="デジタルデータなし"><span>デジタルデータなし</span></label>
+        </div>
+        <p class="err" id="err-scanner" hidden></p>
+      </fieldset>
+      <p class="note" id="scannerNote" hidden>専用システムより送信してください。</p>
+      <div class="attach" id="scanAttach" hidden>
+        <p class="attach-title" id="scanAttachTitle">スキャンデータを添付</p>
+        <div class="drop" id="scanDrop">
+          <!-- accept は付けない：iPhone では拡張子で絞ると STL・PLY・OBJ が選べなくなるため -->
+          <input type="file" id="scanInput" class="visually-hidden" multiple>
+          <label for="scanInput" class="btn-file">ファイルを選択</label>
+          <p class="drop-text">または、ここにドラッグ＆ドロップ</p>
+        </div>
+        <p class="hint">STL・PLY・OBJ・ZIP（複数選択できます）</p>
+        <ul class="file-list" id="scanList"></ul>
+      </div>
+    </section>
+
+    <!-- 写真の有無と画像添付は別に持つ（「有」で画像0枚＝別経路で渡す、も成立） -->
+    <section class="sec" aria-labelledby="h-images">
+      <h2 id="h-images">写真・症例画像</h2>
+      <fieldset id="field-photo" aria-describedby="err-photo">
+        <legend>写真<span class="req">必須</span></legend>
+        <div class="options seg cols-2">
+          <label class="option"><input type="radio" name="photo" value="有"><span>有</span></label>
+          <label class="option"><input type="radio" name="photo" value="無"><span>無</span></label>
+        </div>
+        <p class="err" id="err-photo" hidden></p>
+      </fieldset>
+      <div class="attach" id="imageAttach" hidden>
+        <p class="attach-title">症例画像</p>
+        <input type="file" id="imageInput" class="visually-hidden" multiple accept="image/jpeg,image/png,image/heic,image/heif,.jpg,.jpeg,.png,.heic,.heif">
+        <label for="imageInput" class="btn-file">＋画像を追加</label>
+        <p class="hint">口腔内写真・シェード写真・参考写真など。JPG・PNG・HEIC を複数選択できます。</p>
+        <p class="soft-note" id="photoNote" hidden>画像がまだ添付されていません。</p>
+        <p class="file-msg" id="imageMsg" hidden></p>
+        <ul class="thumbs" id="imageList"></ul>
+      </div>
+    </section>
+
+    <!-- ================= 確認・同意 =================
+         下の2つの文面は試作版の画面確認用の仮のもの（法的な確定版ではない）。本番運用の前に正式な内容へ差し替える -->
+    <section class="sec" aria-labelledby="h-agree">
+      <h2 id="h-agree">確認・同意<span class="req">必須</span></h2>
+      <div class="field" id="field-agreePrivacy">
+        <div class="agree">
+          <input type="checkbox" id="agreePrivacy" aria-labelledby="txt-agreePrivacy" aria-describedby="err-agreePrivacy">
+          <p><span id="txt-agreePrivacy"><button type="button" class="doc-link" aria-expanded="false" aria-controls="docPrivacy">個人情報・症例データの取扱い</button><span class="nb">について確認し、同意します</span></span></p>
+        </div>
+        <p class="err" id="err-agreePrivacy" hidden></p>
+        <div class="doc" id="docPrivacy" hidden>
+          <h3>個人情報・症例データの取扱いについて</h3>
+          <p>株式会社 dc サンライクは、本フォームから送信された歯科医院情報、患者情報、技工指示内容、口腔内写真、スキャンデータその他の症例データを、歯科技工物の製作、受注管理、納品および当該オーダーに関する連絡のために利用します。</p>
+          <p>確認メール送信先として入力されたメールアドレスは、オーダー受付完了の通知および必要な連絡のために利用します。</p>
+          <p>データの保存方法、保存期間、外部サービスの利用等については、本番運用開始前に正式な内容を定めます。</p>
+        </div>
+      </div>
+      <div class="field" id="field-agreeTerms">
+        <div class="agree">
+          <input type="checkbox" id="agreeTerms" aria-labelledby="txt-agreeTerms" aria-describedby="err-agreeTerms">
+          <p><span id="txt-agreeTerms"><button type="button" class="doc-link" aria-expanded="false" aria-controls="docTerms">利用規約</button><span class="nb">を確認し、同意します</span></span></p>
+        </div>
+        <p class="err" id="err-agreeTerms" hidden></p>
+        <div class="doc" id="docTerms" hidden>
+          <h3>利用規約</h3>
+          <ul>
+            <li>・本フォームに入力された「納品希望日」は、納品を確約するものではありません。</li>
+            <li>・症例内容、製作内容、データの状態等により、希望日での対応が難しい場合は当社よりご連絡します。</li>
+            <li>・送信されたスキャンデータ、画像、指示内容等に不足や不備がある場合、再送または追加情報のご提供をお願いする場合があります。</li>
+            <li>・オーダー送信後に内容の変更または追加がある場合は、株式会社 dc サンライクまでご連絡ください。</li>
+            <li>・通信状況その他の理由により正常に受付できない場合があります。受付完了メールをご確認ください。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <div class="actions">
+      <p class="form-msg" id="formMsg" hidden></p>
+      <button type="button" class="btn btn-primary" id="btnConfirm">入力内容を確認</button>
+    </div>
+  </form>
+
+  <!-- ================= 確認画面（CONFIRMATION） ================= -->
+  <section id="viewConfirm" hidden>
+    <h2 class="view-title" id="confirmTitle" tabindex="-1">入力内容の確認</h2>
+    <p class="view-lead">内容を確認して、よければ送信してください。</p>
+    <dl class="confirm-list" id="confirmList"></dl>
+    <p class="confirm-warn" id="confirmWarn" hidden></p>
+    <div class="actions two">
+      <button type="button" class="btn btn-secondary" id="btnEdit">修正する</button>
+      <button type="button" class="btn btn-primary" id="btnSend">送信する</button>
+    </div>
+  </section>
+
+  <!-- ================= 送信完了（デモ） ================= -->
+  <section id="viewDone" class="done" hidden>
+    <div class="done-mark" aria-hidden="true"></div>
+    <h2 class="view-title" id="doneTitle" tabindex="-1">オーダーを受け付けました</h2>
+    <p class="done-lead"><span class="nb">本番運用では、</span><span class="nb">入力いただいたメールアドレスへ</span><span class="nb">受付完了メールをお送りします。</span></p>
+    <p class="done-note"><span class="nb">※試作版 v0.9 では</span><span class="nb">実際のメール送信は行いません。</span></p>
+    <div class="actions">
+      <button type="button" class="btn btn-primary" id="btnPrintA5">A5 指示書PDFを開く</button>
+      <button type="button" class="btn btn-primary" id="btnPrintA4">A4・2分割PDFを開く</button>
+      <p class="form-msg" id="pdfMsg" role="alert" hidden></p>
+    </div>
+    <button type="button" class="text-btn" id="btnNew">新しいオーダーを入力する</button>
+  </section>
+
+</main>
+
+<!-- 印刷専用（画面には出ません） -->
+<div id="printArea" aria-hidden="true"></div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   LAB CONFIG：技工所の固定情報（印刷用）。変更はここだけ。
+   ============================================================ */
+const LAB_INFO = {
+  name: '株式会社 dc サンライク',
+  postalCode: '〒102-0074',
+  address: '東京都千代田区九段南4-7-22メゾンドシャルー505',
+  tel: 'TEL 03-4565-6039',
+  labNumberLabel: '歯科技工所番号',
+  labNumber: '13-64-00033'
+};
+
+/* 共通の小道具 */
+const $ = (id) => document.getElementById(id);
+const escapeHTML = (text) => String(text).replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
+/* 全角の数字・コロン・スラッシュを半角に直す（日本語入力のまま打っても読めるように） */
+const toHalfWidth = (text) => String(text).replace(/[０-９：／]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+const pad2 = (n) => String(n).padStart(2, '0');
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+/* ============================================================
+   FORM：入力チェックと画面の切り替え
+   ============================================================ */
+const VIEWS = ['viewForm', 'viewConfirm', 'viewDone'];
+let selectedSex = '';        // '' | '男' | '女'
+let submittedOrder = null;   // 送信（デモ）した内容。印刷に使う
+
+function showView(viewId, focusId) {
+  VIEWS.forEach((id) => { $(id).hidden = (id !== viewId); });
+  window.scrollTo(0, 0);
+  if (focusId) $(focusId).focus({ preventScroll: true });
+}
+
+/* エラーは該当項目のすぐ下に出す（alert は使わない） */
+function setFieldError(fieldKey, message) {
+  $('field-' + fieldKey).classList.toggle('is-invalid', !!message);
+  const error = $('err-' + fieldKey);
+  error.textContent = message || '';
+  error.hidden = !message;
+  const input = $(fieldKey);
+  if (input) input.setAttribute('aria-invalid', message ? 'true' : 'false');
+  refreshFormMessage();
+}
+
+/* 確認ボタンの上に、直してほしい項目の残り件数を出す（すべて解消したら消える） */
+function refreshFormMessage() {
+  const count = document.querySelectorAll('#viewForm .err:not([hidden])').length;
+  $('formMsg').hidden = (count === 0);
+  $('formMsg').textContent = count ? '入力を確認してほしい項目が ' + count + ' 件あります' : '';
+}
+
+/* ---------- 欄を離れたときの確認は、押し終わってから行う ----------
+   別の場所を押して入力欄を離れた瞬間にエラー行を出し入れすると、押している最中の選択肢やボタンの位置がずれて、
+   そのタップが空振りする。そこで、押している指・マウスが離れてタップの処理が済んでから確認する */
+let isPressing = false;
+let afterPressQueue = [];
+function flushAfterPress() {
+  const queue = afterPressQueue;
+  afterPressQueue = [];
+  queue.forEach((task) => task());
+}
+function afterPress(task) {
+  afterPressQueue.push(task);
+  if (!isPressing) setTimeout(flushAfterPress, 0);
+}
+function initPressTracking() {
+  window.addEventListener('pointerdown', (e) => { if (e.button === 0) isPressing = true; }, true);   // 主ボタン（左クリック・指・ペン）だけ
+  const released = () => { isPressing = false; setTimeout(flushAfterPress, 0); };
+  /* 指・マウスが離れた／操作が打ち切られた／メニューが開いた（Mac の control＋クリックなど） */
+  ['pointerup', 'pointercancel', 'contextmenu'].forEach((type) => window.addEventListener(type, released, true));
+  window.addEventListener('blur', released);      // 押したまま別のウィンドウへ移った場合
+}
+
+/* ---------- 日付：数字入力（7桁・8桁）とカレンダーの両対応 ---------- */
+const isValidDate = (y, m, d) => {
+  const date = new Date(y, m - 1, d);
+  return y >= 2000 && y <= 2099 && date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+};
+const toISO = (y, m, d) => y + '-' + pad2(m) + '-' + pad2(d);
+
+/* 'YYYY-MM-DD' → { year, month, day, weekday } */
+function parseDateValue(iso) {
+  const [year, month, day] = iso.split('-').map(Number);
+  return { year: year, month: month, day: day, weekday: WEEKDAYS[new Date(year, month - 1, day).getDay()] };
+}
+/* 'YYYY-MM-DD' → '2026年9月26日（土）' */
+function formatDateJa(iso) {
+  const d = parseDateValue(iso);
+  return d.year + '年' + d.month + '月' + d.day + '日（' + d.weekday + '）';
+}
+
+/* 入力文字列を日付として読む。戻り値は { iso } / { empty: true } / { error: 'メッセージ' } のどれか
+   読める形：20260926（8桁）、2026926（7桁）、2026/9/26、2026-09-26、2026年9月26日 */
+function parseDateText(text) {
+  const t = toHalfWidth(text).trim();
+  if (!t) return { empty: true };
+  const BAD = { error: '日付として読めません。8桁の数字で入力してください（例：20260926）' };
+  const groups = t.match(/\d+/g) || [];
+  let y, m, d;
+  if (groups.length >= 3 && groups[0].length === 4) {          // 2026/9/26、2026年9月26日（土）など
+    [y, m, d] = groups.map(Number);
+  } else if (/^\d{8}$/.test(t)) {                               // 20260926
+    y = Number(t.slice(0, 4)); m = Number(t.slice(4, 6)); d = Number(t.slice(6, 8));
+  } else if (/^\d{7}$/.test(t)) {                               // 2026926：月1桁＋日2桁、または月2桁＋日1桁
+    y = Number(t.slice(0, 4));
+    const readings = [[Number(t[4]), Number(t.slice(5))], [Number(t.slice(4, 6)), Number(t[6])]]
+      .filter(([mm, dd]) => isValidDate(y, mm, dd));
+    if (readings.length === 2) {
+      /* 例：2026105 は 1月5日 とも 10月5日 とも読める。推測せず、8桁での入力を求める */
+      return { error: readings.map(([mm, dd]) => mm + '月' + dd + '日').join(' とも ') + ' とも読めます。8桁で入力してください（例：'
+        + y + pad2(readings[0][0]) + pad2(readings[0][1]) + '）' };
+    }
+    if (readings.length === 0) return BAD;
+    [m, d] = readings[0];
+  } else {
+    return BAD;
+  }
+  return isValidDate(y, m, d) ? { iso: toISO(y, m, d) } : BAD;
+}
+
+/* 入力欄を離れた瞬間：読めた日付は「2026年9月26日（土）」の表示に直し、カレンダー側にも同じ日付を入れる
+   （画面の高さが変わらない処理なので、すぐ行う。直後にカレンダーを開いても、打った日付から始まる） */
+function normalizeDateField(id) {
+  const result = parseDateText($(id).value);
+  if (result.iso) {
+    $(id).value = formatDateJa(result.iso);
+    $(id + 'Native').value = result.iso;
+  } else if (result.empty) {
+    $(id + 'Native').value = '';
+  }
+}
+/* 入力欄を離れたあと：読めない日付と、日付の前後関係のエラーを出す／消す
+   （エラー行の出し入れで画面が動くので、押し終わってから行う） */
+function checkDateField(id) {
+  setFieldError(id, parseDateText($(id).value).error || '');
+  refreshDateOrder();
+}
+
+/* 日付の前後関係：印象日 ≦ 納品希望日 ≦ セット日（同じ日は可）。納品希望日・セット日は今日より前にできない
+   印象日は過去が普通なので、過去かどうかは見ない。読めない・未入力の欄は相手にしない（その欄自身のエラーに任せる） */
+const isoOf = (id) => parseDateText($(id).value).iso || '';
+const todayISO = () => { const now = new Date(); return toISO(now.getFullYear(), now.getMonth() + 1, now.getDate()); };
+const DATE_ORDER = {
+  dueDate: () => {
+    const due = isoOf('dueDate'), impression = isoOf('impressionDate');
+    if (!due) return '';
+    if (due < todayISO()) return '納品希望日が過去の日付です';
+    return (impression && due < impression) ? '納品希望日が印象日より前になっています' : '';
+  },
+  setDate: () => {
+    const set = isoOf('setDate'), due = isoOf('dueDate');
+    if (!set) return '';
+    if (set < todayISO()) return 'セット日が過去の日付です';
+    return (due && set < due) ? 'セット日が納品希望日より前になっています' : '';
+  }
+};
+/* 読める日付が入っている欄について、前後関係のエラーを出す／消す（どの日付欄を直しても、関係する欄を見直す） */
+function refreshDateOrder() {
+  Object.keys(DATE_ORDER).forEach((id) => {
+    if (isoOf(id)) setFieldError(id, DATE_ORDER[id]());
+  });
+}
+
+function initDateField(id) {
+  const text = $(id), native = $(id + 'Native');
+  text.addEventListener('focus', () => text.select());     // 打ち直しやすいよう全選択
+  /* 離れた瞬間に表示を整え、エラーの確認は押し終わってから行う。
+     確認の時点でこの欄にカーソルが戻っていたら何もしない（次に離れたときに確認する） */
+  text.addEventListener('blur', () => {
+    normalizeDateField(id);
+    afterPress(() => { if (document.activeElement !== text) checkDateField(id); });
+  });
+  /* カレンダーで選んだ日付を入力欄に反映 */
+  native.addEventListener('change', () => {
+    text.value = native.value ? formatDateJa(native.value) : '';
+    setFieldError(id, '');
+    refreshDateOrder();
+  });
+  /* ボタンのどこを押してもカレンダーが開くように（対応ブラウザのみ。非対応でも標準の動作で開く） */
+  native.addEventListener('click', () => {
+    try { if (native.showPicker) native.showPicker(); } catch (error) { /* 標準の動作に任せる */ }
+  });
+}
+
+/* ---------- 時刻：24時間表記。1430 → 14:30、930 → 09:30、14 → 14:00 ---------- */
+function parseTimeText(text) {
+  const t = toHalfWidth(text).trim();
+  if (!t) return { empty: true };
+  const BAD = { error: '時刻として読めません。24時間表記の数字で入力してください（例：1430）' };
+  const groups = t.match(/\d+/g) || [];
+  let h, min;
+  if (groups.length === 2) {                                    // 14:30、14時30分
+    [h, min] = groups.map(Number);
+  } else if (/^\d{1,2}$/.test(t)) {                             // 14 → 14:00
+    h = Number(t); min = 0;
+  } else if (/^\d{3,4}$/.test(t)) {                             // 930、1430
+    h = Number(t.slice(0, t.length - 2)); min = Number(t.slice(-2));
+  } else {
+    return BAD;
+  }
+  return (h >= 0 && h <= 23 && min >= 0 && min <= 59) ? { value: pad2(h) + ':' + pad2(min) } : BAD;
+}
+
+/* 入力欄を離れた瞬間に表示を整え（14:30 の形）、読めない時刻のエラーは押し終わってから出す／消す */
+function normalizeTimeField(id) {
+  const result = parseTimeText($(id).value);
+  if (result.value) $(id).value = result.value;
+}
+function checkTimeField(id) {
+  setFieldError(id, parseTimeText($(id).value).error || '');
+}
+
+/* ---------- 必須・形式チェック（画面の上から順） ---------- */
+const requiredText = (message) => (id) => ($(id).value.trim() === '' ? message : '');
+const dateCheck = (requiredMessage) => (id) => {
+  const result = parseDateText($(id).value);
+  if (result.error) return result.error;
+  return (result.empty && requiredMessage) ? requiredMessage : '';
+};
+const timeCheck = (requiredMessage) => (id) => {
+  const result = parseTimeText($(id).value);
+  if (result.error) return result.error;
+  return (result.empty && requiredMessage) ? requiredMessage : '';
+};
+/* メールアドレス（確認メール送信先）：入力と一致の確認だけを行う。メールの送信はしない
+   前後の空白を除き、全角の英数字・記号は半角に直して読む（日本語入力のまま打っても読めるように） */
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;      // 「@」が1つ、その後ろに「.」がある
+const readEmail = (id) => $(id).value.replace(/[！-～]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).trim();
+const emailCheck = (id) => {
+  const value = readEmail(id);
+  if (!value) return 'メールアドレスを入力してください';
+  return EMAIL_SHAPE.test(value) ? '' : 'メールアドレスの形式を確認してください';
+};
+const emailConfirmCheck = (id) => {
+  const value = readEmail(id);
+  if (!value) return '確認用メールアドレスを入力してください';
+  return value === readEmail('email') ? '' : '確認用メールアドレスが一致しません';
+};
+const EMAIL_CHECKS = [{ id: 'email', check: emailCheck }, { id: 'emailConfirm', check: emailConfirmCheck }];
+/* 選択式（ラジオボタン）の必須：id は選択肢の name。エラーは #field-<name> の中に出す */
+const requiredChoice = (message) => (name) => (getRadio(name) ? '' : message);
+/* 日付：形式・必須を見てから、前後関係を見る */
+const orderedDateCheck = (requiredMessage) => (id) => dateCheck(requiredMessage)(id) || DATE_ORDER[id]();
+/* 預り品：トレーを選んだら個数（1以上）、その他を選んだら内容が必要 */
+const trayCountCheck = (id) => (($('itemTray').checked && !(Number(toHalfWidth($(id).value)) >= 1)) ? 'トレーの個数を入力してください' : '');
+const otherItemCheck = (id) => (($('itemOther').checked && $(id).value.trim() === '') ? 'その他の内容を入力してください' : '');
+const agreeCheck = (id) => ($(id).checked ? '' : '確認・同意が必要です');
+const FIELD_CHECKS = [
+  { id: 'clinicName', check: requiredText('歯科医院名を入力してください') },
+  { id: 'clinicAddress', check: requiredText('医院所在地を入力してください') },
+  { id: 'doctorName', check: requiredText('担当歯科医師を入力してください') },
+  ...EMAIL_CHECKS,
+  { id: 'patientName', check: requiredText('患者名を入力してください') },
+  { id: 'impressionDate', check: dateCheck('') },                      // 任意。入力があるときだけ日付として確認
+  { id: 'dueDate', check: orderedDateCheck('納品希望日を入力してください') },
+  { id: 'setDate', check: orderedDateCheck('セット日を入力してください') },
+  { id: 'setTime', check: timeCheck('セット時刻を入力してください') },
+  { id: 'orderType', check: requiredChoice('受注形態を選択してください') },
+  { id: 'prosthesis', check: requiredText('補綴物名を入力してください') },
+  { id: 'shade', check: requiredText('シェードを入力してください') },
+  { id: 'trayCount', check: trayCountCheck },
+  { id: 'otherItem', check: otherItemCheck },
+  { id: 'teeth', check: () => (toothStates.size === 0 ? '歯を1本以上選択してください' : '') },
+  { id: 'scanner', check: requiredChoice('使用スキャナーを選択してください') },
+  { id: 'photo', check: requiredChoice('写真の有無を選択してください') },
+  { id: 'agreePrivacy', check: agreeCheck },
+  { id: 'agreeTerms', check: agreeCheck }
+];
+const REQUIRED_TEXT_IDS = ['clinicName', 'clinicAddress', 'doctorName', 'patientName', 'prosthesis', 'shade', 'otherItem'];
+const REQUIRED_CHOICE_NAMES = ['orderType', 'scanner', 'photo'];
+const DATE_FIELD_IDS = ['impressionDate', 'dueDate', 'setDate'];
+const AGREE_IDS = ['agreePrivacy', 'agreeTerms'];       // 確認・同意（フォームの最後。2つとも必須）
+
+function validateForm() {
+  let firstInvalid = null;
+  FIELD_CHECKS.forEach(({ id, check }) => {
+    const message = check(id);
+    setFieldError(id, message);
+    /* 移動先：入力欄があればその欄。選択式・歯式は、その項目の枠の中の最初の操作対象 */
+    if (message) firstInvalid = firstInvalid || $(id) || $('field-' + id).querySelector('[tabindex], input, button');
+  });
+
+  if (firstInvalid) {
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    firstInvalid.closest('[id^="field-"]').scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' });
+    firstInvalid.focus({ preventScroll: true });
+  }
+  return !firstInvalid;
+}
+
+const getRadio = (name) => {
+  const checked = document.querySelector('input[name="' + name + '"]:checked');
+  return checked ? checked.value : '';
+};
+
+function initForm() {
+  initPressTracking();
+  /* ブラウザの「戻る」などで入力内容が復元されたとき、欄の出し分けを入力内容に合わせ直す */
+  window.addEventListener('pageshow', () => { updateItemFields(); updateScannerPanel(); updatePhotoPanel(); });
+  /* 入力・選択で、その項目のチェックを満たしたらエラーを消す */
+  REQUIRED_TEXT_IDS.forEach((id) => {
+    const { check } = FIELD_CHECKS.find((field) => field.id === id);
+    $(id).addEventListener('input', () => {
+      if (!check(id)) setFieldError(id, '');
+    });
+  });
+  REQUIRED_CHOICE_NAMES.forEach((name) => {
+    document.querySelectorAll('input[name="' + name + '"]').forEach((radio) => {
+      radio.addEventListener('change', () => setFieldError(name, ''));
+    });
+  });
+  /* メールアドレス：打ち始めたらエラーを消す。欄を離れたときに整えて、形式と一致を確認する
+     （確認するのは入力済みの欄と、すでにエラーが出ている欄。まだ何も入れていない欄には、ここでは何も言わない） */
+  EMAIL_CHECKS.forEach(({ id }) => {
+    $(id).addEventListener('input', () => {
+      if ($(id).value.trim() !== '') setFieldError(id, '');
+    });
+    $(id).addEventListener('blur', () => {
+      $(id).value = readEmail(id);
+      afterPress(() => EMAIL_CHECKS.forEach((field) => {
+        if (readEmail(field.id) || !$('err-' + field.id).hidden) setFieldError(field.id, field.check(field.id));
+      }));
+    });
+  });
+  /* 確認・同意：チェックしたらエラーを消す。リンク風の文字を押すと、すぐ下の本文を開閉する */
+  AGREE_IDS.forEach((id) => {
+    $(id).addEventListener('change', () => {
+      if ($(id).checked) setFieldError(id, '');
+    });
+  });
+  document.querySelectorAll('.doc-link').forEach((link) => {
+    link.addEventListener('click', () => setDocOpen(link, $(link.getAttribute('aria-controls')).hidden));
+  });
+  /* 補綴物名（複数行）：行が増えたら入力欄を自動で縦に伸ばす */
+  $('prosthesis').addEventListener('input', growProsthesisField);
+  DATE_FIELD_IDS.forEach(initDateField);
+  $('setTime').addEventListener('focus', () => $('setTime').select());
+  $('setTime').addEventListener('blur', () => {
+    normalizeTimeField('setTime');
+    afterPress(() => { if (document.activeElement !== $('setTime')) checkTimeField('setTime'); });
+  });
+
+  /* 性別：押して選択、もう一度押すと解除 */
+  document.querySelectorAll('.chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      selectedSex = (selectedSex === chip.dataset.sex) ? '' : chip.dataset.sex;
+      document.querySelectorAll('.chip').forEach((c) => {
+        c.setAttribute('aria-pressed', String(c.dataset.sex === selectedSex));
+      });
+    });
+  });
+  /* 年齢・トレー個数は数字のみ。全角数字は半角に直す（日本語入力の変換中は触らない） */
+  ['age', 'trayCount'].forEach((id) => {
+    const normalize = () => { $(id).value = toHalfWidth($(id).value).replace(/[^0-9]/g, ''); };
+    $(id).addEventListener('input', (e) => { if (!e.isComposing) normalize(); });
+    ['compositionend', 'blur'].forEach((type) => $(id).addEventListener(type, normalize));
+  });
+  /* トレーの個数：数字だけに直したあとの値で、エラーを消してよいか確かめる（「0」や文字では消さない） */
+  ['input', 'compositionend'].forEach((type) => $('trayCount').addEventListener(type, () => {
+    if (!trayCountCheck('trayCount')) setFieldError('trayCount', '');
+  }));
+  /* 預り品：トレーを選んだときだけ個数、その他を選んだときだけ内容の欄を出す */
+  $('itemTray').addEventListener('change', updateItemFields);
+  $('itemOther').addEventListener('change', updateItemFields);
+  updateItemFields();
+  /* Enterキーでフォームが送信されないようにする */
+  $('viewForm').addEventListener('submit', (e) => e.preventDefault());
+}
+
+/* 取扱い・規約の本文を開く／閉じる */
+function setDocOpen(link, open) {
+  $(link.getAttribute('aria-controls')).hidden = !open;
+  link.setAttribute('aria-expanded', String(open));
+}
+
+function growProsthesisField() {
+  const field = $('prosthesis');
+  field.style.height = 'auto';
+  if (field.scrollHeight > field.clientHeight) field.style.height = (field.scrollHeight + 4) + 'px';
+}
+
+function updateItemFields() {
+  $('field-trayCount').hidden = !$('itemTray').checked;
+  $('field-otherItem').hidden = !$('itemOther').checked;
+  /* チェックを外した項目は、欄と一緒にエラーも消す */
+  if (!$('itemTray').checked) setFieldError('trayCount', '');
+  if (!$('itemOther').checked) setFieldError('otherItem', '');
+}
+
+/* ============================================================
+   TOOTH CHART：歯式（FDI表記）。歯ごとに 未選択 → 通常選択 → ポンティック の3状態
+   ============================================================ */
+const UPPER_TEETH = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
+const LOWER_TEETH = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
+const JAWS = [
+  { name: '上顎', teeth: UPPER_TEETH, rightLabel: '右上', leftLabel: '左上' },
+  { name: '下顎', teeth: LOWER_TEETH, rightLabel: '右下', leftLabel: '左下' }
+];
+const ALL_TEETH = UPPER_TEETH.concat(LOWER_TEETH);
+const toothStates = new Map();     // 歯番 → 'on'（通常選択）| 'pontic'（ポンティック）。未選択の歯は入れない
+
+function buildToothChart() {
+  let html = '<div class="chart-sides" aria-hidden="true"><span>右</span><span>左</span></div>';
+  JAWS.forEach((jaw) => {
+    html += '<div class="jaw-block"><p class="jaw-name">' + jaw.name + '</p><div class="jaw">';
+    /* スマホ用の段：1 右ラベル / 2 右の歯 / 3 右の連結 / 4 正中の連結 / 5 左ラベル / 6 左の歯 / 7 左の連結 */
+    html += '<p class="qlabel" style="--sp-r:1" aria-hidden="true">' + jaw.rightLabel + '</p>';
+    html += '<p class="qlabel" style="--sp-r:5" aria-hidden="true">' + jaw.leftLabel + '</p>';
+    jaw.teeth.forEach((tooth, i) => {
+      const onLeftSide = i >= 8;                 // 画面右半分＝患者さんの左側
+      const indexInRow = onLeftSide ? i - 8 : i;
+      html += '<button type="button" class="tooth" data-tooth="' + tooth + '" data-state="" aria-pressed="false"'
+            + ' style="--sp-c:' + (indexInRow * 2 + 1) + ';--sp-r:' + (onLeftSide ? 6 : 2) + ';--pc-c:' + (i * 2 + 1) + '">'
+            + tooth + '<span class="p-mark" aria-hidden="true">P</span></button>';
+      if (i < 15) html += buildLinkButton(tooth, jaw.teeth[i + 1], i, indexInRow, onLeftSide);
+    });
+    html += '</div></div>';
+  });
+  $('toothChart').innerHTML = html;
+  $('toothChart').setAttribute('tabindex', '-1');
+}
+
+/* タップのたびに 未選択 → 通常選択 → ポンティック → 未選択。連結は未選択に戻したときだけ外れる */
+function cycleTooth(tooth) {
+  const state = toothStates.get(tooth);
+  if (!state) {
+    toothStates.set(tooth, 'on');
+  } else if (state === 'on') {
+    toothStates.set(tooth, 'pontic');
+  } else {
+    toothStates.delete(tooth);
+    removeLinksOfTooth(tooth);
+  }
+  renderToothChart();
+}
+
+const getSelectedTeethInOrder = () => ALL_TEETH.filter((tooth) => toothStates.has(tooth));
+const getPonticsInOrder = () => ALL_TEETH.filter((tooth) => toothStates.get(tooth) === 'pontic');
+
+function renderToothChart() {
+  document.querySelectorAll('#toothChart .tooth').forEach((button) => {
+    const tooth = Number(button.dataset.tooth);
+    const state = toothStates.get(tooth) || '';
+    button.dataset.state = state;
+    button.setAttribute('aria-pressed', String(state !== ''));
+    button.setAttribute('aria-label', tooth + (state === 'pontic' ? ' ポンティック' : state === 'on' ? ' 選択' : ''));
+  });
+  renderLinks();
+  const teeth = getSelectedTeethInOrder();
+  const pontics = getPonticsInOrder();
+  $('sumTeeth').textContent = teeth.length ? teeth.join('・') : '未選択';
+  $('sumPontics').textContent = pontics.length ? pontics.join('・') : 'なし';
+  if (teeth.length) setFieldError('teeth', '');
+}
+
+/* ============================================================
+   CONNECTIONS：歯間の連結。となり合う歯の間を押して切り替え
+   ============================================================ */
+const linkKey = (toothA, toothB) => toothA + '-' + toothB;
+/* 連結できる組み合わせ：同じ顎のとなり同士（正中 11-21／41-31 を含む） */
+const ALL_LINKS = [];
+JAWS.forEach((jaw) => {
+  for (let i = 0; i < 15; i++) ALL_LINKS.push([jaw.teeth[i], jaw.teeth[i + 1]]);
+});
+const activeLinks = new Set();     // 例："15-14"
+
+function buildLinkButton(toothA, toothB, i, indexInRow, onLeftSide) {
+  const isMidline = (i === 7);
+  const spRow = isMidline ? 4 : (onLeftSide ? 7 : 3);
+  return '<button type="button" class="link' + (isMidline ? ' mid' : '') + '" data-link="' + linkKey(toothA, toothB) + '"'
+       + ' aria-pressed="false" aria-label="' + toothA + 'と' + toothB + 'を連結"'
+       + ' style="--sp-c:' + (indexInRow * 2 + 2) + ';--sp-r:' + spRow + ';--pc-c:' + (i * 2 + 2) + '">'
+       + (isMidline ? '<span class="mid-num">' + toothA + '</span>' : '')
+       + '<span class="link-mark"></span>'
+       + (isMidline ? '<span class="mid-num">' + toothB + '</span><span class="mid-cap">正中</span>' : '')
+       + '</button>';
+}
+
+function toggleLink(key) {
+  if (activeLinks.has(key)) {
+    activeLinks.delete(key);
+  } else {
+    activeLinks.add(key);
+    /* 連結した両側の歯は、未選択なら通常選択にする（選択済み・ポンティックはそのまま） */
+    key.split('-').map(Number).forEach((tooth) => { if (!toothStates.has(tooth)) toothStates.set(tooth, 'on'); });
+  }
+  renderToothChart();
+}
+
+function removeLinksOfTooth(tooth) {
+  ALL_LINKS.forEach(([a, b]) => {
+    if (a === tooth || b === tooth) activeLinks.delete(linkKey(a, b));
+  });
+}
+
+const getActiveLinksInOrder = () => ALL_LINKS.filter(([a, b]) => activeLinks.has(linkKey(a, b)));
+
+function renderLinks() {
+  document.querySelectorAll('#toothChart .link').forEach((button) => {
+    const [a, b] = button.dataset.link.split('-').map(Number);
+    const isOn = activeLinks.has(button.dataset.link);
+    button.classList.toggle('is-on', isOn);
+    button.classList.toggle('is-ready', !isOn && toothStates.has(a) && toothStates.has(b));
+    button.setAttribute('aria-pressed', String(isOn));
+  });
+  const links = getActiveLinksInOrder();
+  $('sumLinks').textContent = links.length ? links.map(([a, b]) => linkKey(a, b)).join('、') : 'なし';
+}
+
+function initToothChart() {
+  buildToothChart();
+  $('toothChart').addEventListener('click', (e) => {
+    const toothButton = e.target.closest('.tooth');
+    const linkButton = e.target.closest('.link');
+    if (toothButton) cycleTooth(Number(toothButton.dataset.tooth));
+    else if (linkButton) toggleLink(linkButton.dataset.link);
+  });
+  renderToothChart();
+}
+
+/* ============================================================
+   SCANNER：使用スキャナーの選択と、添付欄の出し分け
+   ============================================================ */
+/* 添付欄を出すスキャナーと、その見出し */
+const SCANNERS_WITH_ATTACH = { 'TRIOS': 'スキャンデータを添付', 'その他': 'データ添付' };
+/* 専用システムからデータが届くスキャナー（添付欄は出さない） */
+const SCANNERS_VIA_OWN_SYSTEM = ['iTero', 'Medit'];
+
+const getScanner = () => getRadio('scanner');
+const canAttachScanData = (scanner) => Object.prototype.hasOwnProperty.call(SCANNERS_WITH_ATTACH, scanner);
+
+function updateScannerPanel() {
+  const scanner = getScanner();
+  $('scannerNote').hidden = !SCANNERS_VIA_OWN_SYSTEM.includes(scanner);
+  $('scanAttach').hidden = !canAttachScanData(scanner);
+  if (canAttachScanData(scanner)) $('scanAttachTitle').textContent = SCANNERS_WITH_ATTACH[scanner];
+}
+
+function initScanner() {
+  document.querySelectorAll('input[name="scanner"]').forEach((radio) => {
+    radio.addEventListener('change', updateScannerPanel);
+  });
+  updateScannerPanel();
+}
+
+/* ============================================================
+   ATTACHMENTS：スキャンデータ、写真の有無、症例画像（選択のみ。送信しない）
+   ============================================================ */
+/* スキャンデータは形式を限定しない（想定は STL・PLY・OBJ・ZIP。案内文で示すだけ） */
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'heic', 'heif'];
+const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/heic', 'image/heif'];
+let scanFiles = [];    // { id, file }
+let imageFiles = [];   // { id, file, url }
+let nextFileId = 1;
+
+const getExtension = (fileName) => {
+  const match = /\.([^.]+)$/.exec(fileName);
+  return match ? match[1].toLowerCase() : '';
+};
+const isSameFile = (a, b) => a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
+const isImageFile = (file) => IMAGE_EXTENSIONS.includes(getExtension(file.name)) || IMAGE_MIME_TYPES.includes(file.type);
+
+/* 選ばれたファイルを一覧に足す。isAllowed に合わないものは足さず、そのファイル名を返す */
+function addFiles(fileList, list, isAllowed, withPreview) {
+  const skippedNames = [];
+  Array.from(fileList).forEach((file) => {
+    if (isAllowed && !isAllowed(file)) { skippedNames.push(file.name); return; }
+    if (list.some((item) => isSameFile(item.file, file))) return;    // 同じファイルの二重追加は無視
+    const item = { id: nextFileId++, file: file };
+    if (withPreview) item.url = URL.createObjectURL(file);
+    list.push(item);
+  });
+  return skippedNames;
+}
+
+function removeFile(list, id) {
+  const index = list.findIndex((item) => item.id === id);
+  if (index === -1) return;
+  if (list[index].url) URL.revokeObjectURL(list[index].url);
+  list.splice(index, 1);
+}
+
+function renderScanList() {
+  $('scanList').innerHTML = scanFiles.map((item) => (
+    '<li><span class="file-name">' + escapeHTML(item.file.name) + '</span>'
+    + '<button type="button" class="file-del" data-id="' + item.id + '" aria-label="' + escapeHTML(item.file.name) + ' を削除">×</button></li>'
+  )).join('');
+}
+
+function renderImageList() {
+  $('imageList').innerHTML = imageFiles.map((item) => (
+    '<li><img class="thumb" src="' + item.url + '" alt="" data-ext="' + escapeHTML(getExtension(item.file.name).toUpperCase()) + '">'
+    + '<span class="thumb-name">' + escapeHTML(item.file.name) + '</span>'
+    + '<button type="button" class="thumb-del" data-id="' + item.id + '" aria-label="' + escapeHTML(item.file.name) + ' を削除">削除</button></li>'
+  )).join('');
+  updatePhotoPanel();
+  /* ブラウザが表示できない形式（HEIC など）は、形式名のタイルに置き換える */
+  $('imageList').querySelectorAll('.thumb').forEach((img) => {
+    img.addEventListener('error', () => {
+      const tile = document.createElement('span');
+      tile.className = 'thumb-fallback';
+      tile.textContent = img.dataset.ext || '画像';
+      img.replaceWith(tile);
+    });
+  });
+}
+
+/* 写真「有」のときだけ症例画像の欄を出す。「有」で0枚なら軽く知らせる（送信は止めない） */
+function updatePhotoPanel() {
+  const hasPhoto = getRadio('photo') === '有';
+  $('imageAttach').hidden = !hasPhoto;
+  $('photoNote').hidden = !(hasPhoto && imageFiles.length === 0);
+}
+
+function initAttachments() {
+  document.querySelectorAll('input[name="photo"]').forEach((radio) => radio.addEventListener('change', updatePhotoPanel));
+  updatePhotoPanel();
+  /* スキャンデータ：ファイル選択 */
+  $('scanInput').addEventListener('change', (e) => {
+    addFiles(e.target.files, scanFiles, null, false);
+    e.target.value = '';      // 同じファイルを選び直せるように
+    renderScanList();
+  });
+  /* スキャンデータ：ドラッグ＆ドロップ */
+  const drop = $('scanDrop');
+  ['dragenter', 'dragover'].forEach((type) => drop.addEventListener(type, (e) => {
+    e.preventDefault();
+    drop.classList.add('is-over');
+  }));
+  ['dragleave', 'drop'].forEach((type) => drop.addEventListener(type, () => drop.classList.remove('is-over')));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    addFiles(e.dataTransfer.files, scanFiles, null, false);
+    renderScanList();
+  });
+  /* 枠の外に落としても、ブラウザがそのファイルを開いて入力内容が消えないようにする */
+  ['dragover', 'drop'].forEach((type) => window.addEventListener(type, (e) => e.preventDefault()));
+
+  $('scanList').addEventListener('click', (e) => {
+    const button = e.target.closest('.file-del');
+    if (!button) return;
+    removeFile(scanFiles, Number(button.dataset.id));
+    renderScanList();
+  });
+
+  /* 症例画像：JPG・PNG・HEIC 以外は足さずに、欄のすぐ下で知らせる */
+  $('imageInput').addEventListener('change', (e) => {
+    const skippedNames = addFiles(e.target.files, imageFiles, isImageFile, true);
+    e.target.value = '';
+    $('imageMsg').hidden = skippedNames.length === 0;
+    $('imageMsg').textContent = skippedNames.length
+      ? '画像（JPG・PNG・HEIC）ではないため追加していません：' + skippedNames.join('、')
+      : '';
+    renderImageList();
+  });
+  $('imageList').addEventListener('click', (e) => {
+    const button = e.target.closest('.thumb-del');
+    if (!button) return;
+    removeFile(imageFiles, Number(button.dataset.id));
+    renderImageList();
+  });
+}
+
+/* ============================================================
+   CONFIRMATION：入力内容の確認と送信（デモ）
+   ============================================================ */
+/* 入力内容を1つのデータにまとめる（確認画面と印刷はここだけを見る） */
+function collectOrder() {
+  const scanner = getScanner();
+  const attached = canAttachScanData(scanner) ? scanFiles : [];
+  const dateOf = (id) => parseDateText($(id).value).iso || '';
+  const photo = getRadio('photo');
+  return {
+    clinicName: $('clinicName').value.trim(),
+    clinicAddress: $('clinicAddress').value.trim(),
+    doctorName: $('doctorName').value.trim(),
+    email: readEmail('email'),                         // 確認メール送信先（確認画面に出すだけ。印刷しない・送信しない）
+    patientName: $('patientName').value.trim(),
+    sex: selectedSex,
+    age: $('age').value.trim(),
+    impressionDate: dateOf('impressionDate'),
+    dueDate: dateOf('dueDate'),
+    dueSlot: getRadio('dueSlot'),                      // '' | 'AM' | 'PM'
+    setDate: dateOf('setDate'),
+    setTime: parseTimeText($('setTime').value).value || '',
+    orderType: getRadio('orderType'),                  // '' | '完成' | '試適' | '再製' | '修正'
+    items: {                                           // 預り品
+      opposing: $('itemOpposing').checked,
+      bite: $('itemBite').checked,
+      tray: $('itemTray').checked,
+      trayCount: $('itemTray').checked ? $('trayCount').value.trim() : '',
+      reference: $('itemReference').checked,
+      other: $('itemOther').checked,
+      otherText: $('itemOther').checked ? $('otherItem').value.trim() : ''
+    },
+    prosthesis: $('prosthesis').value.replace(/\r\n?/g, '\n').trim(),   // 複数行。改行はそのまま保持
+    material: $('material').value.trim(),
+    shade: $('shade').value.trim(),
+    photo: photo,                                      // '' | '有' | '無'（画像の添付とは別に持つ）
+    imageCount: photo === '有' ? imageFiles.length : 0,
+    pulp: getRadio('pulp'),                            // '' | '有髄' | '無髄'
+    teeth: getSelectedTeethInOrder(),
+    pontics: getPonticsInOrder(),
+    links: getActiveLinksInOrder(),
+    instructions: $('instructions').value.trim(),
+    scanner: scanner,
+    scanFileNames: attached.map((item) => item.file.name),
+    agreePrivacy: $('agreePrivacy').checked,           // 個人情報・症例データの取扱いへの同意
+    agreeTerms: $('agreeTerms').checked                // 利用規約への同意
+  };
+}
+
+const formatDueDate = (order) => formatDateJa(order.dueDate) + (order.dueSlot ? ' ' + order.dueSlot : '');
+const formatSetDateTime = (order) => formatDateJa(order.setDate) + ' ' + order.setTime;
+
+/* 預り品を「対合模型、トレー（2個）、その他（咬合器）」の形にまとめる */
+function describeItems(items) {
+  const list = [];
+  if (items.opposing) list.push('対合模型');
+  if (items.bite) list.push('バイト');
+  if (items.tray) list.push('トレー' + (items.trayCount ? '（' + items.trayCount + '個）' : ''));
+  if (items.reference) list.push('参考模型');
+  if (items.other) list.push('その他' + (items.otherText ? '（' + items.otherText + '）' : ''));
+  return list.join('、');
+}
+
+/* スキャンデータの届き方を1行で表す（確認画面と印刷で共用） */
+function describeScanData(order) {
+  if (canAttachScanData(order.scanner)) {
+    return order.scanFileNames.length ? order.scanFileNames.length + 'ファイル' : '添付なし';
+  }
+  if (SCANNERS_VIA_OWN_SYSTEM.includes(order.scanner)) return '専用システムより送信';
+  return 'なし';
+}
+
+function renderConfirmation(order) {
+  const rows = [];
+  const add = (label, value, sub, wide, warn) => rows.push({ label: label, value: value, sub: sub, wide: wide, warn: warn });
+  /* TRIOS なのにスキャンデータが0件：別の方法で送る場合もあるので送信は止めず、強く知らせる */
+  const noScanData = order.scanner === 'TRIOS' && order.scanFileNames.length === 0;
+  const photoSub = order.photo === '有'
+    ? '症例画像：' + order.imageCount + '枚' + (order.imageCount === 0 ? '（画像はまだ添付されていません）' : '')
+    : '';
+
+  add('歯科医院名', order.clinicName);
+  add('医院所在地', order.clinicAddress);
+  add('担当歯科医師', order.doctorName);
+  add('確認メール送信先', order.email);
+  add('患者名', order.patientName + ' 様');
+  add('性別', order.sex);
+  add('年齢', order.age ? order.age + '歳' : '');
+  add('印象日', order.impressionDate ? formatDateJa(order.impressionDate) : '');
+  add('納品希望日', formatDueDate(order));
+  add('セット日時', formatSetDateTime(order));
+  add('受注形態', order.orderType || '未選択');
+  add('預り品', describeItems(order.items) || 'なし');
+  add('補綴物名', order.prosthesis);
+  add('使用材料', order.material);
+  add('シェード', order.shade);
+  add('写真', order.photo || '未選択', photoSub);
+  add('歯髄', order.pulp || '指定なし');
+  add('選択歯', order.teeth.join('・'));
+  add('ポンティック', order.pontics.length ? order.pontics.join('・') : 'なし');
+  add('連結', order.links.length ? order.links.map(([a, b]) => linkKey(a, b)).join('\n') : 'なし');
+  add('設計・製作指示', order.instructions);
+  add('スキャナー', order.scanner || '未選択');
+  add('スキャンデータ', describeScanData(order), order.scanFileNames.join('、'), false, noScanData);
+  add('個人情報・症例データの取扱い', order.agreePrivacy ? '同意済み' : '', '', true);
+  add('利用規約', order.agreeTerms ? '同意済み' : '', '', true);
+
+  $('confirmList').innerHTML = rows.map((row) => (
+    '<div' + (row.wide ? ' class="wide"' : '') + '><dt>' + row.label + '</dt>'
+    + (row.value
+      ? '<dd' + (row.warn ? ' class="is-warn"' : '') + '>' + escapeHTML(row.value) + (row.sub ? '<span class="sub">' + escapeHTML(row.sub) + '</span>' : '') + '</dd>'
+      : '<dd class="is-empty">未入力</dd>')
+    + '</div>'
+  )).join('');
+  $('confirmWarn').hidden = !noScanData;
+  $('confirmWarn').textContent = noScanData
+    ? 'TRIOS が選ばれていますが、スキャンデータが添付されていません。別の方法で送る場合は、このまま送信できます。'
+    : '';
+}
+
+function resetOrder() {
+  $('viewForm').reset();
+  $('prosthesis').style.height = '';
+  selectedSex = '';
+  document.querySelectorAll('.chip').forEach((chip) => chip.setAttribute('aria-pressed', 'false'));
+  toothStates.clear();
+  activeLinks.clear();
+  scanFiles = [];
+  imageFiles.forEach((item) => URL.revokeObjectURL(item.url));
+  imageFiles = [];
+  submittedOrder = null;
+  FIELD_CHECKS.forEach(({ id }) => setFieldError(id, ''));
+  document.querySelectorAll('.doc-link').forEach((link) => setDocOpen(link, false));
+  $('imageMsg').hidden = true;
+  renderToothChart();
+  renderScanList();
+  renderImageList();
+  updateScannerPanel();
+  updateItemFields();
+  clearPrintArea();
+  discardPdfs();
+}
+
+/* 確認画面を開く。必須項目の未入力や読めない日付があれば開かずに false を返す */
+function openConfirmation() {
+  if (!validateForm()) return false;
+  renderConfirmation(collectOrder());
+  showView('viewConfirm', 'confirmTitle');
+  return true;
+}
+
+/* ブラウザの「戻る」（iPhoneのスワイプ等）でページごと離れて入力が消えないよう、
+   確認画面に進むときに履歴を1つ積み、「戻る」で入力画面に戻れるようにする */
+let historyAvailable = true;
+function setHistoryState(method, state) {
+  try { history[method](state, ''); } catch (error) { historyAvailable = false; }
+}
+
+function initConfirmation() {
+  /* 再読み込みで前回の履歴の印が残っていたら消す（残っていると「修正する」が効かなくなる） */
+  if (history.state) setHistoryState('replaceState', null);
+  /* 入力欄にカーソルがあるままこのボタンを押すと、押した瞬間に欄のエラーや件数表示が出てボタンの位置がずれ、
+     1回目の押下が空振りすることがある。押してもフォーカスを移さず、入力のチェックはクリック時にまとめて行う */
+  $('btnConfirm').addEventListener('mousedown', (e) => e.preventDefault());
+  $('btnConfirm').addEventListener('click', () => {
+    if (openConfirmation()) setHistoryState('pushState', { view: 'viewConfirm' });
+  });
+  $('btnEdit').addEventListener('click', () => {
+    if (historyAvailable && history.state && history.state.view === 'viewConfirm') history.back();
+    else showView('viewForm');
+  });
+  window.addEventListener('popstate', (e) => {
+    const toConfirm = e.state && e.state.view === 'viewConfirm';
+    if (!toConfirm) { showView('viewForm'); return; }
+    if (openConfirmation()) return;
+    /* 「進む」で確認画面に来たが未入力がある場合：この履歴は入力画面として扱う */
+    setHistoryState('replaceState', null);
+    if ($('viewForm').hidden) showView('viewForm');
+  });
+  /* 通信はしない。確認した内容を控えて、完了画面に進むだけ */
+  $('btnSend').addEventListener('click', () => {
+    /* 確認画面を開いたまま日付が変わった場合などのために、送信の直前にもう一度確認する。問題があれば入力画面に戻し、直すところへ移動する */
+    if (!validateForm()) {
+      setHistoryState('replaceState', null);
+      showView('viewForm');
+      validateForm();
+      return;
+    }
+    clearPrintArea();
+    submittedOrder = Object.assign(collectOrder(), { submittedAt: new Date() });
+    showView('viewDone', 'doneTitle');
+    preparePdfs();      // 技工指示書のPDFを作っておく（PDF）
+  });
+  $('btnNew').addEventListener('click', () => {
+    resetOrder();
+    setHistoryState('replaceState', null);
+    showView('viewForm');
+  });
+}
+
+/* ============================================================
+   PRINT：技工指示書の印刷（現行の紙の指示書と同じ構成）
+   A5＝1枚 ／ A4・2分割＝同じ指示書を上下に2部（どちらも仕上がり約138×200mm）
+   ※ v0.9 から、完了画面のボタンは下の「PDF」の方式で開く。指示書の組み立て（buildSheetHTML・fitSheetText）は共通。
+      ページを直接印刷する printSheet（window.print）は残してあるが、ボタンからは呼ばない
+   ============================================================ */
+const PRINT_PAGE_RULES = {
+  a5: '@page { size: A5 portrait; margin: 0; }',
+  a4x2: '@page { size: A4 portrait; margin: 0; }'
+};
+
+/* --- 【部位】の歯式（紙と同じ 8〜1｜1〜8 の十字表記）。選択歯（支台歯）は塗りなしの丸、ポンティックは薄いグレーで塗った丸、連結は太線 --- */
+function buildSiteChartSVG(order) {
+  const PITCH = 4, CENTER_GAP = 3, LEFT = 2.25, MIDLINE_X = LEFT + PITCH * 8 + CENTER_GAP / 2;
+  const toothX = (i) => LEFT + PITCH * i + PITCH / 2 + (i >= 8 ? CENTER_GAP : 0);
+  const rows = [
+    { teeth: UPPER_TEETH, centerY: 5, barY: 2.1, tickTo: 3.15 },    // 上顎：連結線は数字の上
+    { teeth: LOWER_TEETH, centerY: 11, barY: 13.9, tickTo: 12.85 }  // 下顎：連結線は数字の下
+  ];
+  const selected = new Set(order.teeth);
+  const pontics = new Set(order.pontics);
+  let svg = '<svg viewBox="0 0 71.5 16" preserveAspectRatio="xMaxYMid meet" xmlns="http://www.w3.org/2000/svg" font-family="inherit">'
+          + '<line x1="0.5" y1="8" x2="71" y2="8" stroke="#000" stroke-width="0.3"/>'
+          + '<line x1="' + MIDLINE_X + '" y1="0.6" x2="' + MIDLINE_X + '" y2="15.4" stroke="#000" stroke-width="0.3"/>';
+  rows.forEach((row) => {
+    row.teeth.forEach((tooth, i) => {
+      const x = toothX(i);
+      const isPontic = pontics.has(tooth);
+      if (selected.has(tooth)) {
+        svg += '<circle cx="' + x + '" cy="' + row.centerY + '" r="1.85" fill="' + (isPontic ? '#d6d6d6' : '#fff') + '" stroke="#000" stroke-width="0.3"/>';
+      }
+      svg += '<text x="' + x + '" y="' + (row.centerY + 1.1) + '" text-anchor="middle" font-size="3.1" font-weight="700">' + (tooth % 10) + '</text>';
+    });
+    order.links.forEach(([a, b]) => {
+      const ia = row.teeth.indexOf(a), ib = row.teeth.indexOf(b);
+      if (ia === -1 || ib === -1) return;
+      const xa = toothX(ia), xb = toothX(ib);
+      svg += '<path d="M' + xa + ' ' + row.tickTo + 'V' + row.barY + 'H' + xb + 'V' + row.tickTo + '" fill="none" stroke="#000" stroke-width="0.7" stroke-linejoin="round" stroke-linecap="round"/>';
+    });
+  });
+  return svg + '</svg>';
+}
+
+/* --- 歯列図（補助表示）。【部位】と同じく、選択歯（支台歯）は塗りなしの太い輪郭、ポンティックは薄いグレー、連結は太線 --- */
+const ARCH_SHAPES = {
+  /* widths＝近遠心径、depths＝頬舌径（中切歯→第三大臼歯。比率だけ使う）、a・b＝歯列弓の楕円の半径 */
+  upper: { widths: [8.5, 6.5, 7.5, 7, 6.5, 10, 9, 8.5], depths: [7.5, 7, 8.7, 9.6, 9.6, 11.7, 11.7, 10.6], a: 15, b: 25 },
+  lower: { widths: [5.4, 5.9, 7, 7, 7.2, 11, 10.5, 10], depths: [6.4, 6.8, 8, 8.6, 9, 11.2, 10.9, 10.4], a: 14.5, b: 23.5 }
+};
+
+/* 歯列弓（楕円）に沿って、片側8歯の中心・向き・大きさを求める */
+function layoutArchSide(shape) {
+  const MAX_THETA = 1.62, STEPS = 400;
+  const points = [{ theta: 0, length: 0 }];
+  let length = 0, prevX = 0, prevY = 0;
+  for (let i = 1; i <= STEPS; i++) {
+    const theta = MAX_THETA * i / STEPS;
+    const x = shape.a * Math.sin(theta), y = shape.b * (1 - Math.cos(theta));
+    length += Math.hypot(x - prevX, y - prevY);
+    prevX = x; prevY = y;
+    points.push({ theta: theta, length: length });
+  }
+  const scale = length / shape.widths.reduce((sum, w) => sum + w, 0);
+  let cursor = 0;
+  return shape.widths.map((width, k) => {
+    const target = (cursor + width / 2) * scale;
+    cursor += width;
+    const theta = (points.find((p) => p.length >= target) || points[STEPS]).theta;
+    return {
+      dx: shape.a * Math.sin(theta),
+      dy: shape.b * (1 - Math.cos(theta)),
+      angle: Math.atan2(shape.b * Math.sin(theta), shape.a * Math.cos(theta)) * 180 / Math.PI,
+      rx: width * scale / 2 * 0.93,
+      ry: shape.depths[k] * scale / 2 * 0.93
+    };
+  });
+}
+
+function buildArchSVG(order) {
+  const CENTER_X = 23, AXIS_Y = 31.8;
+  const selected = new Set(order.teeth);
+  const pontics = new Set(order.pontics);
+  const jaws = [
+    { side: layoutArchSide(ARCH_SHAPES.upper), apexY: 3, dir: 1, rightQuadrant: 1, leftQuadrant: 2 },
+    { side: layoutArchSide(ARCH_SHAPES.lower), apexY: 60.4, dir: -1, rightQuadrant: 4, leftQuadrant: 3 }
+  ];
+  const position = {};   // 歯番 → 図上の位置
+  jaws.forEach((jaw) => {
+    jaw.side.forEach((t, k) => {
+      /* 図の左側＝患者さんの右側（紙の指示書と同じ向き） */
+      [[jaw.rightQuadrant, -1], [jaw.leftQuadrant, 1]].forEach(([quadrant, sign]) => {
+        position[quadrant * 10 + k + 1] = {
+          x: CENTER_X + sign * t.dx, y: jaw.apexY + jaw.dir * t.dy,
+          angle: t.angle * sign * jaw.dir, rx: t.rx, ry: t.ry, label: (k === 2 || k === 5) ? String(k + 1) : ''
+        };
+      });
+    });
+  });
+  const r = (n) => Math.round(n * 100) / 100;
+  let svg = '<svg viewBox="0 0 46 62.6" xmlns="http://www.w3.org/2000/svg" font-family="inherit">';
+  ALL_TEETH.forEach((tooth) => {
+    const p = position[tooth];
+    svg += '<ellipse cx="' + r(p.x) + '" cy="' + r(p.y) + '" rx="' + r(p.rx) + '" ry="' + r(p.ry) + '"'
+         + ' transform="rotate(' + r(p.angle) + ' ' + r(p.x) + ' ' + r(p.y) + ')"'
+         + ' fill="' + (pontics.has(tooth) ? '#d6d6d6' : '#fff') + '" stroke="#000" stroke-width="' + (selected.has(tooth) ? 0.55 : 0.3) + '"/>';
+    if (p.label) {
+      svg += '<text x="' + r(p.x) + '" y="' + r(p.y + 1.05) + '" text-anchor="middle" font-size="3">' + p.label + '</text>';
+    }
+  });
+  order.links.forEach(([a, b]) => {
+    /* 2歯の接点をまたぐ短い太線（長さ2.4mm） */
+    const pa = position[a], pb = position[b];
+    const midX = (pa.x + pb.x) / 2, midY = (pa.y + pb.y) / 2;
+    const distance = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
+    const ux = (pb.x - pa.x) / distance * 1.2, uy = (pb.y - pa.y) / distance * 1.2;
+    svg += '<line x1="' + r(midX - ux) + '" y1="' + r(midY - uy) + '" x2="' + r(midX + ux) + '" y2="' + r(midY + uy) + '" stroke="#000" stroke-width="0.8" stroke-linecap="round"/>';
+  });
+  svg += '<line x1="5.6" y1="' + AXIS_Y + '" x2="40.4" y2="' + AXIS_Y + '" stroke="#000" stroke-width="0.2"/>'
+       + '<line x1="' + CENTER_X + '" y1="' + (AXIS_Y - 1.4) + '" x2="' + CENTER_X + '" y2="' + (AXIS_Y + 1.4) + '" stroke="#000" stroke-width="0.2"/>'
+       + '<text x="2.4" y="' + (AXIS_Y + 1.05) + '" text-anchor="middle" font-size="3">右</text>'
+       + '<text x="43.6" y="' + (AXIS_Y + 1.05) + '" text-anchor="middle" font-size="3">左</text>'
+       + '<text x="' + CENTER_X + '" y="' + (AXIS_Y - 2.2) + '" text-anchor="middle" font-size="3">上</text>'
+       + '<text x="' + CENTER_X + '" y="' + (AXIS_Y + 4.5) + '" text-anchor="middle" font-size="3">下</text>';
+  return svg + '</svg>';
+}
+
+/* --- 技工指示書1枚分のHTML。入力のない欄は手書き用に空欄のまま残す --- */
+function buildSheetHTML(order) {
+  const e = escapeHTML;
+  const issued = order.submittedAt;
+  const dateLine = (iso, extra, slot) => {
+    const d = iso ? parseDateValue(iso) : { year: '', month: '', day: '' };
+    return '<div class="ymd-in"><b class="y">' + d.year + '</b><i>年</i><b>' + d.month + '</b><i>月</i><b>' + d.day + '</b><i>日' + (extra || '') + '</i>'
+         + (slot === undefined ? '' : '<span class="slot">' + slot + '</span>') + '</div>';
+  };
+  const issuedISO = toISO(issued.getFullYear(), issued.getMonth() + 1, issued.getDate());
+  const setDay = parseDateValue(order.setDate);
+  const [setHour, setMinute] = order.setTime.split(':');
+  const circleIf = (text, isOn) => (isOn ? '<span class="circ">' + text + '</span>' : text);
+  const circleWord = (text, isOn) => (isOn ? '<span class="circw">' + text + '</span>' : text);
+  const KEEP_DOT = '<span class="dot">・</span>';
+  const checkbox = (label, isOn) => '<span><i class="cb' + (isOn ? ' on' : '') + '"></i>' + label + '</span>';
+  const items = order.items;
+  /* 単冠・連結は歯式から判定：連結＝歯間の連結がある／単冠＝どこにも連結していない選択歯（ポンティック以外）がある */
+  const linkedTeeth = new Set(order.links.reduce((all, pair) => all.concat(pair), []));
+  const hasSingleCrown = order.teeth.some((tooth) => !linkedTeeth.has(tooth) && !order.pontics.includes(tooth));
+  const dataLine = '<b>スキャナー</b>：' + e(order.scanner || '未選択')
+    + '　<b>スキャンデータ</b>：' + e(describeScanData(order))
+    + '　<b>症例画像</b>：' + (order.imageCount ? order.imageCount + '枚' : 'なし');
+
+  return '<div class="sheet">'
+    + '<div class="sh-title">歯科技工指示書</div>'
+
+    /* 医院欄／発注技工所名（LAB_INFO） */
+    + '<div class="sh-top">'
+    +   '<div class="sh-clinic">'
+    +     '<div class="sh-kv"><span class="k">医院名</span><span class="v fit" data-lines="2">' + e(order.clinicName) + '</span></div>'
+    +     '<div class="sh-kv"><span class="k">住所</span><span class="v addr fit" data-lines="2">' + e(order.clinicAddress) + '</span></div>'
+    +     '<div class="sh-kv"><span class="k">担当医</span><span class="v fit">' + e(order.doctorName) + '</span></div>'
+    +   '</div>'
+    +   '<div class="sh-vert"><span>発注技工所名</span></div>'
+    +   '<div class="sh-lab">'
+    +     '<div class="lab-name fit">' + e(LAB_INFO.name) + '</div>'
+    +     '<div class="fit">' + e(LAB_INFO.postalCode) + '</div>'
+    +     '<div class="fit">' + e(LAB_INFO.address) + '</div>'
+    +     '<div class="fit">' + e(LAB_INFO.tel) + '</div>'
+    +     '<div class="lab-num fit">' + e(LAB_INFO.labNumberLabel) + '　' + e(LAB_INFO.labNumber) + '</div>'
+    +   '</div>'
+    + '</div>'
+
+    /* 発行年月日＝送信日／印象日／納品希望日（AM・PM）／セット日時（太枠）／ラボ使用欄 */
+    + '<div class="sh-row sh-dates">'
+    +   '<div class="th r1c1">発行年月日</div><div class="ymd r1c2">' + dateLine(issuedISO, '', '') + '</div>'
+    +   '<div class="th r2c1">印象日</div><div class="ymd r2c2">' + dateLine(order.impressionDate, '', '') + '</div>'
+    +   '<div class="th r3c1">納品希望日</div><div class="ymd r3c2">' + dateLine(order.dueDate, '', e(order.dueSlot)) + '</div>'
+    +   '<div class="due"><div class="due-h">セット日時</div><div class="due-b">'
+    +     dateLine(order.setDate, '（' + setDay.weekday + '）')
+    +     '<div class="ymd-in hm"><i>（</i><b>' + e(setHour) + '</b><i>時</i><b>' + e(setMinute) + '</b><i>分）</i></div>'
+    +   '</div></div>'
+    +   '<div class="labuse"><div class="h">ラボ使用欄</div><div class="b">／</div></div>'
+    + '</div>'
+
+    /* 受注形態：選ばれたものを丸で囲む（未選択なら手書き用にそのまま） */
+    + '<div class="sh-row sh-line center"><div class="th">受注形態</div><div class="td">'
+    +   ['完成', '試適', '再製', '修正'].map((type) => circleWord(type, order.orderType === type)).join('　・　')
+    + '</div></div>'
+
+    + '<div class="sh-row sh-line sh-patient"><div class="th">患者名</div><div class="td"><div class="pt">'
+    +   '<span class="pname fit" data-lines="2">' + e(order.patientName) + '</span><span class="sama">様</span>'
+    +   '<span class="sex">' + circleIf('男', order.sex === '男') + '・' + circleIf('女', order.sex === '女') + '</span>'
+    +   '<span class="age">' + e(order.age) + '</span><span class="sai">歳</span>'
+    + '</div></div></div>'
+
+    /* 預り品：選択した語を丸で囲み、トレーの個数・その他の内容を（ ）に入れる。「他（ ）」は枠の右端まで */
+    + '<div class="sh-row sh-line"><div class="th">預り品</div><div class="td keep-td"><div class="keep">'
+    +   circleWord('対合模型', items.opposing) + KEEP_DOT + circleWord('バイト', items.bite) + KEEP_DOT
+    +   circleWord('トレー', items.tray) + '<span class="pr">(</span><span class="keep-n">' + e(items.trayCount) + '</span><span class="pr">)</span>個' + KEEP_DOT
+    +   circleWord('参考模型', items.reference) + KEEP_DOT
+    +   circleWord('他', items.other) + '<span class="pr">(</span><span class="keep-t fit" data-lines="2">' + e(items.otherText) + '</span><span class="pr">)</span>'
+    + '</div></div></div>'
+
+    /* 補綴物名（複数行）／シェード・使用材料（上下2段）／写真（選んだ方を丸囲み。画像が添付されていれば枚数も） */
+    + '<div class="sh-row sh-pros">'
+    +   '<div><div class="pbox"><div class="pk">補綴物名</div><div class="pv multi">' + e(order.prosthesis) + '</div></div></div>'
+    +   '<div class="duo"><div class="duo-in">'
+    +     '<div class="pbox"><div class="pk">シェード</div><div class="pv fit" data-lines="2">' + e(order.shade) + '</div></div>'
+    +     '<div class="pbox"><div class="pk">使用材料</div><div class="pv fit" data-lines="2">' + e(order.material) + '</div></div>'
+    +   '</div></div>'
+    +   '<div class="photo"><div class="h">写真</div><div class="b">' + circleIf('有', order.photo === '有') + '・' + circleIf('無', order.photo === '無')
+    +     (order.imageCount > 0 ? '<span class="n">' + order.imageCount + '枚</span>' : '') + '</div></div>'
+    + '</div>'
+
+    + '<div class="sh-bottom">'
+    /* 左：設計／指示事項のチェック（有髄・無髄は入力どおり、単冠・連結は歯式から判定）と歯列図 */
+    +   '<div class="sh-design">'
+    +     '<div class="bh">【 設計 / 指示事項 】</div>'
+    +     '<div class="cbs">' + checkbox('有髄', order.pulp === '有髄') + checkbox('無髄', order.pulp === '無髄')
+    +       checkbox('単冠', hasSingleCrown) + checkbox('連結', order.links.length > 0) + '</div>'
+    +     '<div class="arch">' + buildArchSVG(order) + '</div>'
+    +   '</div>'
+    /* 右：部位（歯式。白丸＝支台歯、グレー丸＝ポンティック、太線＝連結）と、設計・製作指示（入力された本文のみ） */
+    +   '<div class="sh-right">'
+    +     '<div class="bui-row"><div class="bh">【 部位 】</div><div class="bui">' + buildSiteChartSVG(order) + '</div></div>'
+    +     '<div class="sh-inst">'
+    +       '<div class="sh-note" data-text="' + e(order.instructions) + '"><i class="sp"></i><i class="hole"></i><span class="sh-note-text">' + e(order.instructions) + '</span></div>'
+    +     '</div>'
+    +   '</div>'
+    /* 最下段：データの届き方（左）とラボ使用欄（右） */
+    +   '<div class="sh-data fit">' + dataLine + '</div>'
+    +   '<div class="sh-labuse2"><div class="h">ラボ使用欄</div><div class="b"><i></i><i></i></div></div>'
+    + '</div>'
+    + '</div>';
+}
+
+/* --- 印字が枠に収まるよう、文字を少しずつ小さくする --- */
+function fitSheetText(root) {
+  /* 補綴物名（複数行）：4行ぶんの高さに収まるよう 7.5pt（10px）まで縮める。それでも多い分は枠が伸びる */
+  root.querySelectorAll('.pv.multi').forEach((el) => {
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    const fourLines = size * 1.2 * 4 + 3;
+    while (el.scrollHeight > fourLines && size - 0.5 >= 10) {
+      size -= 0.5;
+      el.style.fontSize = size + 'px';
+    }
+  });
+  /* 1行の欄：はみ出す間、文字を小さく。data-lines が2以上の欄は、7割まで縮めても入らなければ折り返す */
+  root.querySelectorAll('.fit').forEach((el) => {
+    const baseSize = parseFloat(getComputedStyle(el).fontSize);
+    const canWrap = Number(el.dataset.lines || 1) > 1;
+    const shrinkWhile = (isOver, minSize) => {
+      let size = parseFloat(getComputedStyle(el).fontSize);
+      while (isOver() && size > minSize) {
+        size -= 0.5;
+        el.style.fontSize = size + 'px';
+      }
+    };
+    shrinkWhile(() => el.scrollWidth > el.clientWidth, baseSize * (canWrap ? 0.7 : 0.5));
+    if (el.scrollWidth <= el.clientWidth || !canWrap) return;
+    /* 折り返す欄：枠の高さに収まるまで縮める。それでも入らなければ、入る行数までで切って「…」を付ける */
+    el.classList.add('is-wrapped');
+    el.style.setProperty('--lines', 99);
+    el.style.fontSize = baseSize + 'px';
+    shrinkWhile(() => el.scrollHeight > el.clientHeight + 1, baseSize * 0.5);
+    if (el.scrollHeight > el.clientHeight + 1) {
+      const lineHeight = parseFloat(getComputedStyle(el).fontSize) * 1.15;
+      el.style.setProperty('--lines', Math.max(1, Math.floor(el.clientHeight / lineHeight + 0.2)));
+    }
+  });
+  /* 設計・製作指示：7pt（約9.3px）まで小さくしても入らない分は、黙って切らずに省略を明記する */
+  root.querySelectorAll('.sh-note').forEach((el) => {
+    const MIN_SIZE = 9.3;
+    const OVER_NOTE = '<span class="over">※長文のため途中まで印字</span>';
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollHeight > el.clientHeight && size - 0.5 >= MIN_SIZE) {
+      size -= 0.5;
+      el.style.fontSize = size + 'px';
+    }
+    if (el.scrollHeight <= el.clientHeight) return;
+    const text = el.dataset.text;
+    const body = el.querySelector('.sh-note-text');
+    let low = 0, high = text.length;
+    while (low < high) {                       // 収まる最大の文字数を二分探索
+      const mid = Math.ceil((low + high) / 2);
+      body.innerHTML = escapeHTML(text.slice(0, mid)) + '…' + OVER_NOTE;
+      if (el.scrollHeight <= el.clientHeight) low = mid; else high = mid - 1;
+    }
+    body.innerHTML = escapeHTML(text.slice(0, low)) + '…' + OVER_NOTE;
+  });
+}
+
+function printSheet(mode) {
+  if (!submittedOrder) return;
+  const sheet = buildSheetHTML(submittedOrder);
+  $('printArea').innerHTML = (mode === 'a4x2')
+    ? '<div class="pp-a4x2"><div class="pp-half"><div class="rot">' + sheet + '</div></div>'
+      + '<div class="pp-cut"></div><div class="pp-half"><div class="rot">' + sheet + '</div></div></div>'
+    : '<div class="pp-a5"><div class="pp-fit">' + sheet + '</div></div>';
+  $('printPageRule').textContent = PRINT_PAGE_RULES[mode];
+  document.documentElement.classList.add('print-sheet');   // 印刷時は指示書だけを出す
+  fitSheetText($('printArea'));
+  window.print();
+}
+
+function clearPrintArea() {
+  $('printArea').innerHTML = '';
+  $('printPageRule').textContent = '';
+  document.documentElement.classList.remove('print-sheet');
+}
+
+function initPrint() {
+  const pageRule = document.createElement('style');   // 用紙サイズの指定（印刷のたびに書き換える）
+  pageRule.id = 'printPageRule';
+  document.head.appendChild(pageRule);
+  /* Safari系（iPhoneの全ブラウザを含む）かどうか。印刷の拡大率の補正に使う（CSSの html.wk-print） */
+  if ((navigator.vendor || '').indexOf('Apple') === 0) document.documentElement.classList.add('wk-print');
+}
+
+/* ============================================================
+   PDF：技工指示書を実寸のPDFにして、新しいタブで開く
+   ページそのものを印刷（window.print）すると、端末やブラウザごとに大きさ・位置が変わり、日時やURLも入ってしまう。
+   そこで、指示書を画像に描いて A5／A4 実寸のPDFに貼り、そのPDFを開いて印刷してもらう（PC・iPhone・iPad で同じPDF）。
+   PDFはブラウザの中だけで作る。入力内容・写真・スキャンデータは、どこにも送らない。
+   ============================================================ */
+const PDF_SAFE_MARGIN_MM = 3;        // A5：用紙の端に残す余白（mm）。指示書は、この内側に入る最大の大きさで置く
+const PDF_A4_SHEET_SCALE = 1.15;     // A4・2分割：指示書の拡大率。1部が約138×200mm（v0.8 までの印刷と同じ大きさ）
+const PDF_RENDER_SCALE = 4;          // 画像の細かさ（指示書の1pxを何画素で描くか）。4＝紙の上で約330dpi（3だと約245dpi）
+const SHEET_MM = { width: 120, height: 174 };     // 指示書の版面の大きさ（CSS の .sheet と同じ値にすること）
+const PAGE_MM = { a5: { width: 148, height: 210 }, a4: { width: 210, height: 297 } };
+const PX_PER_MM = 96 / 25.4;         // CSS の 1mm は何pxか
+/* 指示書の画像の大きさ（画素）。端数は切り上げ、PDFに貼るときは画素数から求めた mm（IMAGE_MM）で置くので、版面の位置はずれない */
+const IMAGE_PX = { width: Math.ceil(SHEET_MM.width * PX_PER_MM * PDF_RENDER_SCALE), height: Math.ceil(SHEET_MM.height * PX_PER_MM * PDF_RENDER_SCALE) };
+const IMAGE_MM = { width: IMAGE_PX.width / PX_PER_MM / PDF_RENDER_SCALE, height: IMAGE_PX.height / PX_PER_MM / PDF_RENDER_SCALE };
+
+/* PDFを組み立てるライブラリ（jsPDF）。必要になったときに読み込む（urls の先頭から試し、読めなければ次の配信元へ）。
+   integrity＝届いたファイルが本物かを確かめる照合値。版を変えるときは、照合値も必ず変えること */
+const PDF_LIBRARY = {
+  isReady: () => !!(window.jspdf && window.jspdf.jsPDF),
+  integrity: 'sha384-qovJwSBbRDPP5cEjCp8S0UP66wrvnjaa60XMOGzTNanrThcrGfXfnZkvgY8N1KT3',
+  urls: ['https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js',
+         'https://unpkg.com/jspdf@4.2.1/dist/jspdf.umd.min.js']
+};
+const PDF_LIBRARY_TIMEOUT_MS = 15000;
+
+function loadScript(url, integrity) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    const finish = (isLoaded) => {
+      clearTimeout(timer);
+      script.onload = script.onerror = null;
+      if (isLoaded) { resolve(); } else { script.remove(); reject(new Error('script not loaded')); }
+    };
+    const timer = setTimeout(() => finish(false), PDF_LIBRARY_TIMEOUT_MS);
+    script.onload = () => finish(true);
+    script.onerror = () => finish(false);
+    script.integrity = integrity;
+    script.crossOrigin = 'anonymous';           // 照合（integrity）に必要
+    script.referrerPolicy = 'no-referrer';      // このページのURL（リファラー）を配信元へ送らない
+    script.src = url;
+    document.head.appendChild(script);
+  });
+}
+
+let pdfLibraryLoading = null;        // 読み込み中の Promise（同時に二重で読み込まない）
+function loadPdfLibrary() {
+  if (!pdfLibraryLoading) {
+    pdfLibraryLoading = (async () => {
+      for (const url of PDF_LIBRARY.urls) {
+        if (PDF_LIBRARY.isReady()) return;
+        try { await loadScript(url, PDF_LIBRARY.integrity); } catch (error) { /* 次の配信元を試す */ }
+      }
+      if (!PDF_LIBRARY.isReady()) throw new Error('PDF library not loaded');
+    })().finally(() => { pdfLibraryLoading = null; });        // 失敗しても、次にまた試せるように
+  }
+  return pdfLibraryLoading;
+}
+
+/* 文字列を「1文字ずつ」（grapheme）または「単語ずつ」（word）に分ける。絵文字や濁点つきの文字を途中で割らない */
+function splitText(text, granularity) {
+  if (window.Intl && Intl.Segmenter) return Array.from(new Intl.Segmenter(undefined, { granularity: granularity }).segment(text), (part) => part.segment);
+  return Array.from(text);
+}
+
+/* ---------- 罫線の太さ ----------
+   ブラウザは罫線の太さを「画面の画素」の単位に丸める。同じ 0.25mm の線でも、iPad（Retina）では PC の半分、
+   Windows の拡大表示（125% など）では別の太さ……と、端末ごとに数値が変わってしまう。
+   そこで、CSS に書かれたままの太さ（mm）を読み取り、PC の印刷（v0.8 までの仕上がり）と同じ決め方
+   「1px 未満は 1px、それ以上は端数切り捨て」で太さを決め直す。PDF の線は、どの端末でもこの太さで描く */
+const BORDER_SIDES = ['top', 'right', 'bottom', 'left'];
+const BORDER_KEYWORD_PX = { thin: 1, medium: 3, thick: 5 };
+const CSS_UNIT_PX = { px: 1, mm: PX_PER_MM, cm: PX_PER_MM * 10, q: PX_PER_MM / 4, in: 96, pt: 96 / 72, pc: 16 };
+
+/* ページのCSSのうち罫線の太さを決めている規則を、作業用コピー（#pdfStage）の中だけで効く「--pdf-bw-top など」に写したCSSを作る。
+   規則の並びも強さも元のままなので、要素ごとに「CSSに書かれたままの太さ」をブラウザ自身に選ばせて読める（太さそのものと違い、丸められない） */
+function borderWidthMirrorCss() {
+  const splitSelectors = (text) => {              // 「.a, .b:not(.c, .d)」を、かっこの外のカンマで分ける
+    const parts = [];
+    let depth = 0, start = 0;
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === '(' || text[i] === '[') depth++;
+      else if (text[i] === ')' || text[i] === ']') depth--;
+      else if (text[i] === ',' && depth === 0) { parts.push(text.slice(start, i)); start = i + 1; }
+    }
+    parts.push(text.slice(start));
+    return parts;
+  };
+  let css = '#pdfStage *,#pdfStage *::before,#pdfStage *::after{' + BORDER_SIDES.map((side) => '--pdf-bw-' + side + ':0px;').join('') + '}';
+  const copyRules = (rules) => {
+    Array.from(rules).forEach((rule) => {
+      if (rule.type === CSSRule.MEDIA_RULE) { if (window.matchMedia(rule.conditionText).matches) copyRules(rule.cssRules); return; }
+      if (rule.type !== CSSRule.STYLE_RULE) return;
+      const widths = BORDER_SIDES.map((side) => {
+        const name = 'border-' + side + '-width', value = rule.style.getPropertyValue(name);
+        return value ? '--pdf-bw-' + side + ':' + value + (rule.style.getPropertyPriority(name) ? '!important' : '') + ';' : '';
+      }).join('');
+      if (widths) css += splitSelectors(rule.selectorText).map((selector) => '#pdfStage ' + selector).join(',') + '{' + widths + '}';
+    });
+  };
+  Array.from(document.styleSheets).forEach((sheet) => {
+    try { copyRules(sheet.cssRules); } catch (error) { /* 中を読めないスタイルシート（別のサイトのもの）は対象外 */ }
+  });
+  return css;
+}
+
+/* CSSの長さ（"0.25mm" など）を px に直す。読み取れない書き方（calc など）は NaN */
+function cssLengthToPx(text, fontSize) {
+  const value = text.trim().toLowerCase();
+  if (value in BORDER_KEYWORD_PX) return BORDER_KEYWORD_PX[value];
+  const match = /^(\d+\.?\d*|\.\d+)([a-z]*)$/.exec(value);
+  if (!match) return NaN;
+  if (match[2] === 'em') return parseFloat(match[1]) * fontSize;
+  if (match[2] === '') return parseFloat(match[1]) === 0 ? 0 : NaN;
+  return match[2] in CSS_UNIT_PX ? parseFloat(match[1]) * CSS_UNIT_PX[match[2]] : NaN;
+}
+
+/* その要素（pseudo を渡したときは ::before／::after）の罫線の太さ［上・右・下・左］を px で返す。線のない辺は 0 */
+function lineWidths(el, pseudo) {
+  const style = getComputedStyle(el, pseudo || null);
+  return BORDER_SIDES.map((side) => {
+    const snapped = parseFloat(style['border' + side[0].toUpperCase() + side.slice(1) + 'Width']) || 0;      // ブラウザが丸めた後の太さ
+    if (!snapped) return 0;
+    const written = (!pseudo && el.style.getPropertyValue('border-' + side + '-width')) || style.getPropertyValue('--pdf-bw-' + side);
+    const px = cssLengthToPx(written, parseFloat(style.fontSize));
+    return Math.max(1, Math.floor((px > 0 ? px : snapped + 0.5) + 0.001));      // 読み取れないときは、丸めた後の太さを四捨五入して使う
+  });
+}
+
+/* 作業用コピーの罫線を、決め直した太さ（lineWidths）にそろえる。文字の調整（fitSheetText）の前に行い、欄の内側の広さも端末によらず同じにする */
+function fixBorderWidths(stage) {
+  const css = document.createElement('style');
+  css.textContent = borderWidthMirrorCss();
+  stage.appendChild(css);
+  const elements = Array.from(stage.querySelectorAll('*'));
+  const widths = elements.map((el) => lineWidths(el));
+  elements.forEach((el, index) => {
+    ['::before', '::after'].forEach((pseudo) => {                        // ::before・::after で描いている線（チェックの印）
+      const pseudoWidths = lineWidths(el, pseudo);
+      if (!pseudoWidths.some(Boolean)) return;
+      el.setAttribute('data-pdf-el', index);
+      css.textContent += '#pdfStage [data-pdf-el="' + index + '"]' + pseudo + '{border-width:' + pseudoWidths.join('px ') + 'px}';
+    });
+  });
+  elements.forEach((el, index) => { if (widths[index].some(Boolean)) el.style.borderWidth = widths[index].join('px ') + 'px'; });
+}
+
+/* 縮めても枠に入りきらない欄は、CSS が末尾を「…」にして切っている（.fit）。この「…」は画像に描き写せないので、
+   入るところまでの文字に「…」を付けた文字へ置き換えておく（途中で切れていることが、紙の上でも分かるように）。
+   ブラウザを拡大表示しているときなどは、はみ出しの数値が1pxほど狂うことがある。その程度の差では切らず、
+   切っても収まらない（＝数値が当てにならない）ときは、元の文字に戻す */
+function markCutText(stage) {
+  const range = document.createRange();
+  const countLines = (el) => {                    // 文字が何行に折り返されているか（行ごとの上端の位置を数える）
+    range.selectNodeContents(el);
+    let lines = 0, lastTop = -Infinity;
+    Array.from(range.getClientRects(), (rect) => rect.top).sort((a, b) => a - b).forEach((top) => {
+      if (top - lastTop > 2) { lines++; lastTop = top; }
+    });
+    return lines;
+  };
+  stage.querySelectorAll('.fit').forEach((el) => {
+    if (el.children.length) return;                                       // 文字だけの欄が対象
+    const text = el.textContent, letters = splitText(text, 'grapheme');
+    let isOver = () => el.scrollWidth > el.clientWidth + 1;               // 1行の欄：横にはみ出している
+    if (el.classList.contains('is-wrapped')) {                            // 折り返す欄：fitSheetText が決めた行数（--lines）を超えている
+      const maxLines = Number(el.style.getPropertyValue('--lines')) || 99;
+      el.style.setProperty('--lines', 99);                                // CSS による行数の打ち切りを外し、全部の行を数えられるようにする
+      isOver = () => countLines(el) > maxLines;
+    }
+    if (!isOver()) return;
+    const cutAt = (count) => { el.textContent = letters.slice(0, count).join('') + '…'; };
+    let low = 0, high = letters.length;
+    while (low < high) {                                                  // 入る最大の文字数を二分探索
+      const mid = Math.ceil((low + high) / 2);
+      cutAt(mid);
+      if (isOver()) high = mid - 1; else low = mid;
+    }
+    if (low > 0) cutAt(low); else el.textContent = text;
+  });
+}
+
+/* 指示書の図（SVG＝歯列図・部位の歯式）を、描き写せる画像にして返す（Map：SVGの要素 → 画像）。
+   画像は PDF_RENDER_SCALE 倍の大きさで作るので、拡大してもぼやけない。大きさが 0 の図（欄が押しつぶされたとき）は描かない */
+async function loadFigures(stage, unitScale) {
+  const fontFamily = getComputedStyle(stage.querySelector('.sheet')).fontFamily;
+  const figures = new Map();
+  await Promise.all(Array.from(stage.querySelectorAll('svg'), async (svg) => {
+    const box = svg.getBoundingClientRect();
+    const width = Math.round(box.width * unitScale), height = Math.round(box.height * unitScale);
+    if (!width || !height) return;
+    const copy = svg.cloneNode(true);
+    copy.setAttribute('width', width);
+    copy.setAttribute('height', height);
+    copy.setAttribute('font-family', fontFamily);     // 単独の画像にすると「親と同じ書体」の指定が効かないので、書体名を直接書く
+    const image = new Image();
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error('figure not drawn'));
+      image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(copy));
+    });
+    figures.set(svg, image);
+  }));
+  return figures;
+}
+
+/* ---------- 指示書を画像に描く ----------
+   作業用コピーの各要素について、ブラウザが決めた位置を読み取り、同じ位置に「背景 → 罫線 → 中身（文字・図）」の順で canvas へ描き写す。
+   文字は、ブラウザが置いた位置と基準線（ベースライン）をそのまま使うので、書体や端末が違っても枠の中での位置は画面どおりになる。
+   対応しているのは指示書で使っている表現だけ：単色の背景、実線の罫線（角丸を含む）、文字、図（SVG）、はみ出しの切り取り（overflow）、
+   ::before／::after で描く箱（チェックの印）。指示書のCSSに影・点線・背景画像・回転などを新しく使うときは、ここにも描き方を足すこと */
+async function paintSheet(stage) {
+  const sheet = stage.querySelector('.sheet');
+  const frame = sheet.getBoundingClientRect();
+  const unit = frame.width / parseFloat(getComputedStyle(sheet).width);        // CSSの数値（px）を、位置の数値の単位に直す倍率（通常は 1）
+  const scale = SHEET_MM.width * PX_PER_MM * PDF_RENDER_SCALE / frame.width;   // 位置の数値を、画像の画素に直す倍率（通常は PDF_RENDER_SCALE）
+  const figures = await loadFigures(stage, scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = IMAGE_PX.width;
+  canvas.height = IMAGE_PX.height;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(scale, 0, 0, scale, -frame.left * scale, -frame.top * scale);      // 以後は、画面上の位置の数値のまま描ける
+  const range = document.createRange();
+  const isPainted = (color) => color !== 'transparent' && !/^rgba\(.*,\s*0\)$/.test(color);
+
+  /* 角を丸めた四角の輪郭（rx・ry＝角の丸みの半径。0 ならただの四角） */
+  const roundedRect = (x, y, width, height, rx, ry) => {
+    ctx.moveTo(x + rx, y);
+    ctx.lineTo(x + width - rx, y);
+    ctx.ellipse(x + width - rx, y + ry, rx, ry, 0, -Math.PI / 2, 0);
+    ctx.lineTo(x + width, y + height - ry);
+    ctx.ellipse(x + width - rx, y + height - ry, rx, ry, 0, 0, Math.PI / 2);
+    ctx.lineTo(x + rx, y + height);
+    ctx.ellipse(x + rx, y + height - ry, rx, ry, 0, Math.PI / 2, Math.PI);
+    ctx.lineTo(x, y + ry);
+    ctx.ellipse(x + rx, y + ry, rx, ry, 0, Math.PI, Math.PI * 1.5);
+    ctx.closePath();
+  };
+
+  /* 箱の背景と罫線を描く。box＝位置と大きさ、lines＝罫線の太さ［上・右・下・左］（px） */
+  const paintBox = (box, style, lines) => {
+    const hasLines = lines.some(Boolean), hasBackground = isPainted(style.backgroundColor);
+    if (!hasLines && !hasBackground) return;
+    const corner = style.borderTopLeftRadius.split(' ').map((value, index) => parseFloat(value) * (value.slice(-1) === '%' ? (index ? box.height : box.width) / 100 : unit));
+    let rx = corner[0], ry = corner.length > 1 ? corner[1] : corner[0];          // 角の丸み（4つの角は同じとして扱う）
+    if (rx > 0 && ry > 0) {
+      const fit = Math.min(1, box.width / (2 * rx), box.height / (2 * ry));      // 箱より大きい丸みは、CSSと同じく縮める
+      rx *= fit; ry *= fit;
+      if (hasBackground) { ctx.fillStyle = style.backgroundColor; ctx.beginPath(); roundedRect(box.left, box.top, box.width, box.height, rx, ry); ctx.fill(); }
+      if (hasLines) {                                                            // 輪の形：外側の輪郭と、線の太さだけ内側の輪郭の間を塗る
+        const line = lines[0] * unit;
+        ctx.fillStyle = style.borderTopColor;
+        ctx.beginPath();
+        roundedRect(box.left, box.top, box.width, box.height, rx, ry);
+        roundedRect(box.left + line, box.top + line, box.width - 2 * line, box.height - 2 * line, Math.max(0, rx - line), Math.max(0, ry - line));
+        ctx.fill('evenodd');
+      }
+      return;
+    }
+    /* まっすぐな線は、画像の画素の境目にそろえて描く（にじまず、どの線も同じ太さになる） */
+    const x0 = Math.round((box.left - frame.left) * scale), x1 = Math.round((box.right - frame.left) * scale);
+    const y0 = Math.round((box.top - frame.top) * scale), y1 = Math.round((box.bottom - frame.top) * scale);
+    const thick = lines.map((line) => (line ? Math.max(1, Math.round(line * unit * scale)) : 0));
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (hasBackground) { ctx.fillStyle = style.backgroundColor; ctx.fillRect(x0, y0, x1 - x0, y1 - y0); }
+    ctx.fillStyle = style.borderTopColor;
+    ctx.fillRect(x0, y0, x1 - x0, thick[0]);
+    ctx.fillRect(x1 - thick[1], y0, thick[1], y1 - y0);
+    ctx.fillRect(x0, y1 - thick[2], x1 - x0, thick[2]);
+    ctx.fillRect(x0, y0, thick[3], y1 - y0);
+    ctx.restore();
+  };
+
+  /* ::before／::after で描いている箱（チェックの印）。位置は CSS の left・top・width・height と transform から求める */
+  const paintPseudoBox = (el, pseudo, box, style) => {
+    const pseudoStyle = getComputedStyle(el, pseudo);
+    if (pseudoStyle.content === 'none' || pseudoStyle.content === 'normal' || pseudoStyle.display === 'none') return;
+    const lines = lineWidths(el, pseudo);
+    const left = parseFloat(pseudoStyle.left), top = parseFloat(pseudoStyle.top), width = parseFloat(pseudoStyle.width), height = parseFloat(pseudoStyle.height);
+    const isBox = pseudoStyle.content.replace(/["']/g, '') === '' && pseudoStyle.position === 'absolute' && style.position !== 'static' && [left, top, width, height].every(isFinite);
+    if (!isBox) throw new Error('pseudo element is not supported');             // 描けない飾り・文字は、黙って抜かさずに失敗させる
+    const matrix = pseudoStyle.transform === 'none' ? null : pseudoStyle.transform.replace(/^matrix\(|\)$/g, '').split(',').map(parseFloat);
+    if (matrix && matrix.length !== 6) throw new Error('pseudo element is not supported');
+    const origin = pseudoStyle.transformOrigin.split(' ').map(parseFloat);
+    ctx.save();
+    ctx.translate(box.left + ((parseFloat(style.borderLeftWidth) || 0) + left + origin[0]) * unit, box.top + ((parseFloat(style.borderTopWidth) || 0) + top + origin[1]) * unit);
+    if (matrix) ctx.transform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4] * unit, matrix[5] * unit);
+    ctx.translate(-origin[0] * unit, -origin[1] * unit);
+    ctx.scale(unit, unit);                                                      // ここからは、箱の左上を (0,0) とした CSS の数値で描く
+    if (isPainted(pseudoStyle.backgroundColor)) { ctx.fillStyle = pseudoStyle.backgroundColor; ctx.fillRect(0, 0, width, height); }
+    ctx.fillStyle = pseudoStyle.borderTopColor;
+    ctx.fillRect(0, 0, width, lines[0]);
+    ctx.fillRect(width - lines[1], 0, lines[1], height);
+    ctx.fillRect(0, height - lines[2], width, lines[2]);
+    ctx.fillRect(0, 0, lines[3], height);
+    ctx.restore();
+  };
+
+  /* 書体ごとに「文字の範囲の下端」から基準線（ベースライン）までの距離を測る。基準線は、大きさ0の箱（inline-block）を並べると、その下端に来る */
+  const baselineDrops = new Map();
+  const baselineDrop = (style) => {
+    const key = [style.fontStyle, style.fontWeight, style.fontSize, style.fontFamily].join('|');
+    if (!baselineDrops.has(key)) {
+      const probe = document.createElement('span');
+      probe.style.cssText = 'position:absolute;left:0;top:0;white-space:nowrap;visibility:hidden;letter-spacing:0';
+      probe.style.fontStyle = style.fontStyle;
+      probe.style.fontWeight = style.fontWeight;
+      probe.style.fontSize = style.fontSize;
+      probe.style.fontFamily = style.fontFamily;
+      probe.innerHTML = '国<span style="display:inline-block;width:0;height:0;margin:0;padding:0;border:0;vertical-align:baseline"></span>';
+      sheet.appendChild(probe);
+      range.selectNodeContents(probe.firstChild);
+      baselineDrops.set(key, range.getBoundingClientRect().bottom - probe.lastChild.getBoundingClientRect().bottom);
+      probe.remove();
+    }
+    return baselineDrops.get(key);
+  };
+
+  /* 文字を描く。単語ごと（字間のある文字と、行をまたぐ単語は1文字ごと）に、ブラウザが置いた位置を読んで同じ位置に描く */
+  const paintText = (node, style) => {
+    if (!node.data.trim()) return;
+    ctx.font = style.fontStyle + ' ' + style.fontWeight + ' ' + parseFloat(style.fontSize) * unit + 'px ' + style.fontFamily;
+    ctx.fillStyle = style.color;
+    const drop = baselineDrop(style);
+    const paintPiece = (piece, start, mayDivide) => {
+      if (!piece.trim()) return;
+      range.setStart(node, start);
+      range.setEnd(node, start + piece.length);
+      const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+      if (rects.length > 1 && mayDivide) {                                      // 行をまたいでいる → 1文字ずつに分けて描く
+        let at = start;
+        splitText(piece, 'grapheme').forEach((letter) => { paintPiece(letter, at, false); at += letter.length; });
+      } else if (rects.length) {
+        ctx.fillText(piece, rects[0].left, rects[0].bottom - drop);
+      }
+    };
+    let offset = 0;
+    splitText(node.data, parseFloat(style.letterSpacing) ? 'grapheme' : 'word').forEach((piece) => { paintPiece(piece, offset, true); offset += piece.length; });
+  };
+
+  const paintElement = (el) => {
+    const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility !== 'visible') return;
+    const box = el.getBoundingClientRect(), lines = lineWidths(el);
+    paintBox(box, style, lines);
+    paintPseudoBox(el, '::before', box, style);
+    const isClipped = style.overflowX !== 'visible' || style.overflowY !== 'visible';
+    if (isClipped) {                                                            // はみ出した中身は、罫線の内側で切り取る
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(box.left + lines[3] * unit, box.top + lines[0] * unit, box.width - (lines[1] + lines[3]) * unit, box.height - (lines[0] + lines[2]) * unit);
+      ctx.clip();
+    }
+    Array.from(el.childNodes).forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) paintText(child, style);
+      else if (figures.has(child)) { const place = child.getBoundingClientRect(); ctx.drawImage(figures.get(child), place.left, place.top, place.width, place.height); }
+      else if (child instanceof HTMLElement && child.tagName !== 'STYLE') paintElement(child);
+    });
+    if (isClipped) ctx.restore();
+    paintPseudoBox(el, '::after', box, style);
+  };
+  paintElement(sheet);
+  return canvas;
+}
+
+/* 指示書（印刷と同じ buildSheetHTML → fitSheetText）を画面の外に組み、1枚の画像（PNG）にする。使い終わったら消す */
+async function renderSheetImage(order) {
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;      // 文字の準備ができてから組む
+  const stage = document.createElement('div');
+  stage.id = 'pdfStage';                        // 画面の外に置く（CSS の #pdfStage）。display:none にすると位置を読み取れない
+  stage.setAttribute('aria-hidden', 'true');
+  stage.innerHTML = buildSheetHTML(order);
+  document.body.appendChild(stage);
+  try {
+    fixBorderWidths(stage);
+    fitSheetText(stage);
+    markCutText(stage);
+    const canvas = await paintSheet(stage);
+    try {
+      return canvas.toDataURL('image/png');     // PNG＝罫線や文字がにじまない
+    } finally {
+      canvas.width = canvas.height = 0;         // 作業用の画像のメモリをすぐに返す（iPhone・iPad は画像用のメモリの上限が小さい）
+    }
+  } finally {
+    stage.remove();
+  }
+}
+
+function newPdf(page, title) {
+  const doc = new window.jspdf.jsPDF({ unit: 'mm', format: [page.width, page.height], orientation: 'portrait', compress: true });
+  doc.setProperties({ title: title });
+  return doc;
+}
+
+/* A5（148×210mm）：余白 PDF_SAFE_MARGIN_MM の内側に、縦横比を保ったまま入る最大の大きさで、中央に置く */
+function buildPdfA5(image) {
+  const page = PAGE_MM.a5;
+  const scale = Math.min((page.width - 2 * PDF_SAFE_MARGIN_MM) / SHEET_MM.width, (page.height - 2 * PDF_SAFE_MARGIN_MM) / SHEET_MM.height);
+  const left = (page.width - SHEET_MM.width * scale) / 2, top = (page.height - SHEET_MM.height * scale) / 2;      // 版面の左上
+  const doc = newPdf(page, '歯科技工指示書（A5）');
+  doc.addImage(image, 'PNG', left, top, IMAGE_MM.width * scale, IMAGE_MM.height * scale, 'sheet', 'FAST');
+  return doc.output('blob');
+}
+
+/* A4・2分割（210×297mm）：同じ指示書を90°回して上下に2部。中央で切るとA5が2枚になる。
+   指示書の大きさは変えず、「上端〜上の指示書」「上の指示書〜切り取り線」「切り取り線〜下の指示書」「下の指示書〜下端」の
+   4つの余白を同じにする（＝5.25mm）。左右は中央に置く（余白は約5mm） */
+function buildPdfA4x2(image) {
+  const page = PAGE_MM.a4, cutLineY = page.height / 2;                 // 切り取り線＝148.5mm
+  const shortSide = SHEET_MM.width * PDF_A4_SHEET_SCALE;               // 回した後の版面の高さ＝138mm
+  const longSide = SHEET_MM.height * PDF_A4_SHEET_SCALE;               // 回した後の版面の幅＝200.1mm
+  const gap = (page.height - 2 * shortSide) / 4;                       // 5.25mm
+  const left = (page.width - longSide) / 2;                            // 4.95mm
+  const imageWidth = IMAGE_MM.width * PDF_A4_SHEET_SCALE, imageHeight = IMAGE_MM.height * PDF_A4_SHEET_SCALE;      // 回す前の画像の大きさ
+  const doc = newPdf(page, '歯科技工指示書（A4・2分割）');
+  [gap, cutLineY + gap].forEach((top) => {
+    /* jsPDF の回転は「画像の左下の角」を軸にした反時計回り。指示書の上辺が左に来る向き（v0.8 までの印刷と同じ）になる。
+       回した後、版面の左上（＝画像の左下）が (left, top + shortSide) に来るように、回す前の位置を指定する */
+    doc.addImage(image, 'PNG', left + imageHeight, top + shortSide - imageHeight, imageWidth, imageHeight, 'sheet', 'FAST', 90);
+  });
+  doc.setDrawColor(119);
+  doc.setLineWidth(0.2);
+  doc.setLineDashPattern([1.5, 1.5], 0);
+  doc.line(0, cutLineY, page.width, cutLineY);                          // 切り取り線（細いグレーの破線）
+  return doc.output('blob');
+}
+
+/* ---------- 完了画面のボタン ----------
+   PDFは完了画面を開いたときに作っておき、ボタンは「作ってあるPDFを開くだけ」にする。
+   押してから作ると、作り終えるまでの間に「新しいタブを開く」操作が iPhone・iPad でブロックされることがあるため */
+const PDF_BUTTONS = {
+  a5: { id: 'btnPrintA5', label: 'A5 指示書PDFを開く' },
+  a4x2: { id: 'btnPrintA4', label: 'A4・2分割PDFを開く' }
+};
+const PDF_KINDS = Object.keys(PDF_BUTTONS);
+/* ボタンの下に出す案内。文節ごとに区切っておき、文節の途中では折り返さない（.nb） */
+const PDF_MESSAGES = {
+  failed: ['PDFの作成に失敗しました。', 'もう一度お試しください。'],
+  blocked: ['PDFを開けませんでした。', 'ブラウザでポップアップを許可して、', 'もう一度お試しください。']
+};
+let pdfUrls = null;      // 作ったPDFの置き場所 { a5: 'blob:…', a4x2: 'blob:…' }。まだ無い（作成中・失敗）ときは null
+let pdfJob = 0;          // 作成の通し番号。作成中に入力し直されたら、古い作成の結果は使わない
+
+function setPdfButtons(isWorking, message) {
+  PDF_KINDS.forEach((kind) => {
+    const button = $(PDF_BUTTONS[kind].id);
+    button.disabled = isWorking;                                      // 作成中は押せない（二重に作らない）
+    button.textContent = isWorking ? 'PDFを作成中…' : PDF_BUTTONS[kind].label;
+  });
+  const box = $('pdfMsg');
+  box.textContent = '';
+  (message || []).forEach((phrase) => {
+    const part = document.createElement('span');
+    part.className = 'nb';
+    part.textContent = phrase;
+    box.appendChild(part);
+  });
+  box.hidden = !message;
+}
+
+/* 作ってあるPDFを、この画面からは使わなくする（作成中のものがあれば、その結果も使わない）。
+   PDFの置き場所（Blob URL）は消さない：すでに開いたタブで、後から保存・再読み込みができるように（ページを閉じると消える） */
+function discardPdfs() {
+  pdfJob++;
+  pdfUrls = null;
+  setPdfButtons(false);
+}
+
+async function preparePdfs() {
+  discardPdfs();
+  const job = pdfJob, order = submittedOrder;
+  if (!order) return;
+  setPdfButtons(true);
+  try {
+    await loadPdfLibrary();
+    const image = await renderSheetImage(order);
+    const files = { a5: buildPdfA5(image), a4x2: buildPdfA4x2(image) };
+    if (job !== pdfJob) return;                                       // 作成中に入力し直された → この結果は使わない
+    pdfUrls = {};
+    PDF_KINDS.forEach((kind) => { pdfUrls[kind] = URL.createObjectURL(files[kind]); });
+    setPdfButtons(false);
+  } catch (error) {
+    console.error(error);                                             // 原因を調べられるよう、開発者ツールに残す
+    if (job === pdfJob) setPdfButtons(false, PDF_MESSAGES.failed);
+  }
+}
+
+function openPdf(kind) {
+  if (!pdfUrls) { preparePdfs(); return; }      // 作成に失敗していたとき：作り直す（できあがったら、もう一度押すと開く）
+  const opened = window.open(pdfUrls[kind], '_blank');
+  setPdfButtons(false, opened ? null : PDF_MESSAGES.blocked);
+}
+
+function initPdf() {
+  PDF_KINDS.forEach((kind) => $(PDF_BUTTONS[kind].id).addEventListener('click', () => openPdf(kind)));
+}
+
+/* ============================================================
+   起動
+   ============================================================ */
+initForm();
+initToothChart();
+initScanner();
+initAttachments();
+initConfirmation();
+initPrint();
+initPdf();
+</script>
+</body>
+</html>
